@@ -127,9 +127,12 @@ export class VideoQueue {
     const job = this.state.jobs.find(item => item.id === jobId);
     if (!job) throw new Error('视频任务不存在');
     if (!['error', 'needs_review'].includes(job.status)) throw new Error('只能重试失败或待确认的任务');
-    job.status = 'queued';
+    const needsDraft = this.provider?.draft && this.provider?.promptModel && !String(job.prompt || '').trim();
+    job.status = needsDraft ? 'draft_pending' : 'queued';
     job.error = '';
     job.providerId = null;
+    job.attempts = 0;
+    job.draftAttempts = 0;
     job.nextAt = 0;
     this.save();
     queueMicrotask(() => this.pump());

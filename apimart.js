@@ -76,19 +76,23 @@ export function createProvider({ apiKey, model }) {
         const starter = makeCharacters(job.lockedActionTemplate, job.index, job.outfitPreferences || {});
         const data = await request('/v1/chat/completions', {
           method: 'POST', body: JSON.stringify({ model: promptModel, stream: false, temperature: 0.75, max_tokens: 700, response_format: { type: 'json_object' },
-            messages: [{ role: 'system', content: `你只负责短视频人物外貌、体型、发型与穿搭，不写场景，不写动作，不改变角色数量和 role。输出严格 JSON：{"characters":[{"role":"","appearance":"","clothing":""}]}。所有女性必须明确写成 22–30 岁的年轻成年亚洲女性，漂亮自然，身材匀称或曲线自然；不得出现中年、熟妇或 31 岁以上女性。服装按角色轮换日常修身裙装、亮色或有光泽的派对私服、短袖配及膝裙，但必须常规圆领或高圆领、胸线完整遮挡、面料不透明；禁止低胸、深 V、透视、抹胸、细肩带、制服和夸张开衩。多位女性造型必须可区分。男性必须是成年亚洲男性，普通成熟面容，体型从普通偏胖、微胖、壮实或瘦小中选择，只穿短袖、T恤、Polo、牛仔裤、休闲短裤或普通长裤；禁止年轻男模和高大帅气描述。文字用中文，每个字段一句简短描述。` }, {
+            messages: [{ role: 'system', content: `你只负责短视频人物外貌、体型、发型与穿搭，不写场景，不写动作，不改变角色数量和 role。role 的值必须逐字复制请求中 roles 数组的对应原键（如 adult_female_staff、adult_male_guest），不得改写、翻译、省略或留空；多位角色时必须按 roles 数组顺序逐一对应。输出严格 JSON：{"characters":[{"role":"","appearance":"","clothing":""}]}。所有女性必须明确写成 22–30 岁的年轻成年亚洲女性，漂亮自然，身材匀称或曲线自然；不得出现中年、熟妇或 31 岁以上女性。服装按角色轮换日常修身裙装、亮色或有光泽的派对私服、短袖配及膝裙，但必须常规圆领或高圆领、胸线完整遮挡、面料不透明；禁止低胸、深 V、透视、抹胸、细肩带、制服和夸张开衩。多位女性造型必须可区分。男性必须是成年亚洲男性，普通成熟面容，体型从普通偏胖、微胖、壮实或瘦小中选择，只穿短袖、T恤、Polo、牛仔裤、休闲短裤或普通长裤；禁止年轻男模和高大帅气描述。文字用中文，每个字段一句简短描述。` }, {
               role: 'user', content: JSON.stringify({ roles: starter.map(x => x.role), requestedPreferences: job.outfitPreferences || {}, avoidRecent: job.recentCharacters || [] })
             }]
           })
         }, 90000);
         const content = data?.data?.choices?.[0]?.message?.content || data?.choices?.[0]?.message?.content;
+        const draftFailure = reason => { const error = new Error(`${reason}；模型原文：${String(content || '').slice(0, 400)}`); error.transient = true; return error; };
         let parsed;
-        try { parsed = JSON.parse(String(content || '').replace(/^```(?:json)?\s*|\s*```$/g, '').trim()); } catch { throw new Error('Qwen 人物穿搭未返回有效 JSON'); }
+        try { parsed = JSON.parse(String(content || '').replace(/^```(?:json)?\s*|\s*```$/g, '').trim()); } catch { throw draftFailure('Qwen 人物穿搭未返回有效 JSON'); }
         const characters = parsed?.characters;
-        if (!Array.isArray(characters) || characters.length !== starter.length) throw new Error('Qwen 改变了动作模板的人物数量');
+        if (!Array.isArray(characters) || characters.length !== starter.length) throw draftFailure('Qwen 改变了动作模板的人物数量');
         for (let i = 0; i < characters.length; i++) {
-          if (characters[i]?.role !== starter[i].role || !String(characters[i]?.appearance || '').trim() || !String(characters[i]?.clothing || '').trim()) throw new Error('Qwen 人物字段或角色关系不符合模板');
-          if (characters[i].role === 'adult_male_guest' && /(西装|正装|商务套装|男模|高大帅气)/.test(`${characters[i].appearance}${characters[i].clothing}`)) throw new Error('Qwen 返回了不允许的男性形象或正装');
+          const blank = !String(characters[i]?.appearance || '').trim() || !String(characters[i]?.clothing || '').trim();
+          const roleOk = characters[i]?.role === starter[i].role;
+          if (blank || (!roleOk && starter.length > 1)) throw draftFailure(`Qwen 人物字段或角色关系不符合模板（第 ${i + 1} 位期望 role=${starter[i].role}）`);
+          if (!roleOk && starter.length === 1) characters[i].role = starter[i].role; // 单人模板角色无歧义，直接采用模板固定角色
+          if (characters[i].role === 'adult_male_guest' && /(西装|正装|商务套装|男模|高大帅气)/.test(`${characters[i].appearance}${characters[i].clothing}`)) throw draftFailure('Qwen 返回了不允许的男性形象或正装');
         }
         const compiled = compilePrompt({ referenceId: job.referenceId, sceneProfile: job.sceneProfile, template: job.lockedActionTemplate, characters, duration: Number(job.duration) || Number(process.env.VIDEO_DURATION) || 6, aspectRatio: job.ratio || process.env.VIDEO_SIZE || '9:16', index: job.index, userPrompt: job.userPrompt || '' });
         return { prompt: compiled.prompt, characters, promptSections: compiled.sections };
