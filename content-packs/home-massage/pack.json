@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "id": "home-massage",
+  "name": "家庭按摩参考图",
+  "navLabel": "家庭按摩",
+  "order": 20,
+  "engine": "reference-pairs",
+  "status": "active",
+  "description": "多张人物与场景参考图，每张生成一个不同视频。",
+  "scenes": [
+    { "id": "home-sofa", "name": "家庭沙发", "requiredEvidence": ["home", "sofa"] },
+    { "id": "home-bed", "name": "家庭床边", "requiredEvidence": ["home", "bed"] }
+  ],
+  "actions": [
+    {
+      "id": "foot-massage-continuous",
+      "name": "连续足部按摩",
+      "continuityPolicy": "one-hand-contact-at-all-times"
+    },
+    {
+      "id": "manual-service-override",
+      "name": "人工指定服务动作",
+      "continuityPolicy": "specified-action-throughout"
+    }
+  ],
+  "policies": {
+    "referenceRole": "visual-reference-not-first-frame",
+    "humanReview": ["prompt-batch", "image-batch", "video-direction"],
+    "audio": "elegant-ambiguous-instrumental"
+  }
+}

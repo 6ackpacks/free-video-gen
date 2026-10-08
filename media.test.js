@@ -65,4 +65,35 @@ test('first preview is served from a completed local cache', async t => {
   assert.deepEqual(Buffer.concat(chunks), bytes);
   assert.equal(requests, 1);
   assert.deepEqual(fs.readFileSync(store.filename(job)), bytes);
+
+  const download = new PassThrough();
+  const headers = {};
+  download.on('data', () => {});
+  download.writeHead = (status, value) => { download.statusCode = status; Object.assign(headers, value); };
+  const downloadEnded = once(download, 'end');
+  await store.serve(job, { headers: {} }, download, true);
+  await downloadEnded;
+  assert.equal(download.statusCode, 200);
+  assert.match(headers['Content-Disposition'], /^attachment; filename="video-preview\.mp4"$/);
+});
+
+test('batch archive is a downloadable zip with a safe custom filename', async t => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'video-archive-'));
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const store = new MediaStore(directory, { maxKbps: 8192 });
+  const jobs = [{ id: 'one' }, { id: 'two' }];
+  fs.writeFileSync(store.filename(jobs[0]), Buffer.from('video-one'));
+  fs.writeFileSync(store.filename(jobs[1]), Buffer.from('video-two'));
+  const res = new PassThrough();
+  const chunks = []; const headers = {};
+  res.on('data', chunk => chunks.push(chunk));
+  res.writeHead = (status, value) => { res.statusCode = status; Object.assign(headers, value); };
+  const ended = once(res, 'end');
+  await store.archive(jobs, res, 'videos-batch_01.zip');
+  await ended;
+  const bytes = Buffer.concat(chunks);
+  assert.equal(res.statusCode, 200);
+  assert.equal(headers['Content-Type'], 'application/zip');
+  assert.equal(headers['Content-Disposition'], 'attachment; filename="videos-batch_01.zip"');
+  assert.equal(bytes.subarray(0, 4).toString('hex'), '504b0304');
 });

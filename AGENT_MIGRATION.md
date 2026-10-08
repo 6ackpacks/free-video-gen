@@ -9,7 +9,7 @@
 1. APIMart：千问提示词、图片理解、监控底图加工、Grok 视频。
 2. TokenDance：`wan3.0-video` 视频生成。
 3. 阿里云百炼网关：`wan3.0-video` 视频生成。
-4. DoubaoManager：豆包多账号登录池与 Seedance 视频生成。
+4. 内置 DoubaoManager：随工作台自动启动和退出的豆包多账号登录池与 Seedance 视频生成。
 5. 14 个固定动作模板、底图场景分析、试片确认和批量任务。
 
 ## 二、Agent 必须执行的步骤
@@ -101,15 +101,15 @@ Invoke-RestMethod http://127.0.0.1:4173/api/provider | ConvertTo-Json -Depth 6
 
 `doubao` 是否真正可用，需要继续完成豆包账号池安装和登录。
 
-### 6. 安装和登录豆包账号池
+### 6. 启动并登录豆包账号池
 
 双击：
 
 ```text
-安装并启动豆包管理器.cmd
+启动工作台.cmd
 ```
 
-脚本会克隆 `https://github.com/shukeCyp/DoubaoManager.git` 到 `integrations/DoubaoManager/` 并运行。随后在 Electron 工作台里添加豆包账号并逐个扫码登录。每个账号使用独立持久化会话；Cookie 不在迁移包中，必须在新电脑重新登录。
+工作台会自动克隆 `https://github.com/shukeCyp/DoubaoManager.git` 到 `integrations/DoubaoManager/`，准备 Python/Playwright 环境并作为后台服务运行。随后在工作台的豆包账号页点击“新增本地账号”，在右侧内嵌豆包页面登录，再点击“同步”加入执行池。登录过程不会打开外部浏览器。每个账号使用独立持久化会话；Cookie 不在迁移包中，必须在新电脑重新登录。
 
 完成后检查：
 

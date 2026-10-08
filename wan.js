@@ -2,6 +2,7 @@ import { readSecret } from './secrets.js';
 
 const cleanError = data => data?.output?.message || data?.message || data?.error?.message || 'Wan3 API 请求失败';
 const stateOf = value => ({ PENDING: 'waiting', RUNNING: 'running', SUCCEEDED: 'complete', FAILED: 'error', CANCELED: 'error', UNKNOWN: 'error' }[String(value || '').toUpperCase()] || 'waiting');
+export const shouldGenerateAudio = prompt => /(?:音乐|配乐|背景音乐|music|soundtrack)/i.test(String(prompt || ''));
 
 export function createWanProvider({ id, name, keyPrefix, submitUrl, tasksBaseUrl, fetchImpl = fetch }) {
   const key = readSecret(keyPrefix);
@@ -23,10 +24,11 @@ export function createWanProvider({ id, name, keyPrefix, submitUrl, tasksBaseUrl
     async submit(job) {
       if (!key) throw new Error(`${name} 尚未配置 API Key`);
       const input = { prompt: String(job.prompt || '').slice(0, 20000) };
-      if (job.referenceImageUrl) input.media = [{ type: 'first_frame', url: job.referenceImageUrl }];
+      const imageMode = job.referenceMode === 'reference-image' ? 'reference-image' : 'first-frame';
+      if (job.referenceImageUrl) input.media = [{ type: imageMode === 'reference-image' ? 'reference_image' : 'first_frame', url: job.referenceImageUrl }];
       const payload = { model: 'wan3.0-video', input, parameters: {
-        resolution: normalizeResolution(job.resolution), ratio: job.referenceImageUrl ? 'adaptive' : (job.ratio || '9:16'),
-        duration: normalizeDuration(job.duration), audio: false, watermark: false, prompt_extend: false, seed: Number.isInteger(job.seed) ? job.seed : -1
+        resolution: normalizeResolution(job.resolution), ratio: imageMode === 'first-frame' && job.referenceImageUrl ? 'adaptive' : (job.ratio || '9:16'),
+        duration: normalizeDuration(job.duration), audio: shouldGenerateAudio(job.prompt), watermark: false, prompt_extend: false, seed: normalizeSeed(job.seed)
       } };
       const data = await request(submitUrl, { method: 'POST', headers: { 'X-DashScope-Async': 'enable' }, body: JSON.stringify(payload) }, 60000);
       const taskId = data?.output?.task_id;
@@ -51,3 +53,8 @@ export function createWanProviders(options = {}) {
 
 export function normalizeResolution(value) { const upper = String(value || '480P').toUpperCase(); return ['480P', '720P', '1080P'].includes(upper) ? upper : '480P'; }
 export function normalizeDuration(value) { return Math.max(2, Math.min(30, Math.round(Number(value) || 5))); }
+export function normalizeSeed(value) {
+  if (value === -1) return -1;
+  if (!Number.isInteger(value) || value < 0) return -1;
+  return value % 2147483648;
+}

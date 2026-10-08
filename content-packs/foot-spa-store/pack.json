@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "id": "foot-spa-store",
+  "name": "足浴店底图动作库",
+  "navLabel": "足浴店",
+  "order": 10,
+  "engine": "background-variants",
+  "status": "active",
+  "description": "一张足浴店底图生成多人物、多动作视频。",
+  "scenes": [
+    {
+      "id": "foot-spa-corridor",
+      "name": "足浴店走廊",
+      "requiredEvidence": ["corridor", "visible-door", "clear-walkway"]
+    }
+  ],
+  "actionLibrary": "prompt-skills/foot-spa-video-prompt-skill/actions",
+  "expectedActionCount": 14,
+  "policies": {
+    "referenceRole": "locked-background",
+    "humanReview": ["scene-analysis", "trial-video"],
+    "audio": "ambient-or-template"
+  }
+}

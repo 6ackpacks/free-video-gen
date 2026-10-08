@@ -22,3 +22,5 @@ secrets.json
 .idea/
 .vscode/
 coverage/
+__pycache__/
+outputs/

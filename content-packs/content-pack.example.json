@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "id": "ktv-lobby-greeting",
+  "name": "KTV 大厅迎宾",
+  "engine": "background-variants",
+  "status": "draft",
+  "description": "示例：固定 KTV 大厅底图，生成不同人物迎宾动作。",
+  "scenes": [
+    {
+      "id": "ktv-lobby",
+      "name": "KTV 大厅",
+      "requiredEvidence": ["lobby", "clear-entrance", "clear-walkway"]
+    }
+  ],
+  "actions": [
+    {
+      "id": "host-greeting",
+      "name": "迎宾并指引",
+      "continuityPolicy": "greet-then-guide"
+    }
+  ],
+  "policies": {
+    "referenceRole": "locked-background",
+    "humanReview": ["scene-analysis", "template-draft", "trial-video"],
+    "audio": "ambient-or-template"
+  }
+}

@@ -76,7 +76,7 @@ export function createProvider({ apiKey, model }) {
         const starter = makeCharacters(job.lockedActionTemplate, job.index, job.outfitPreferences || {});
         const data = await request('/v1/chat/completions', {
           method: 'POST', body: JSON.stringify({ model: promptModel, stream: false, temperature: 0.75, max_tokens: 700, response_format: { type: 'json_object' },
-            messages: [{ role: 'system', content: `你只负责短视频人物外貌、体型、发型与穿搭，不写场景，不写动作，不改变角色数量和 role。输出严格 JSON：{"characters":[{"role":"","appearance":"","clothing":""}]}。女性必须是年轻成年亚洲女性，漂亮自然，身材匀称或曲线明显；衣服合身修身且得体，可轮换制服、修身长裙、挂脖裙、细肩带裙、单肩裙、短袖配短裙、T 恤配包臀裙，不能透视、走光或夸张低胸。多位女性造型必须可区分。男性必须是成年亚洲男性，普通成熟面容，体型从普通偏胖、微胖、壮实或瘦小中选择，只穿短袖、T恤、Polo、牛仔裤、休闲短裤或普通长裤；禁止西装、正装、商务套装、年轻男模、高大帅气描述。文字用中文，每个字段一句简短描述。` }, {
+            messages: [{ role: 'system', content: `你只负责短视频人物外貌、体型、发型与穿搭，不写场景，不写动作，不改变角色数量和 role。输出严格 JSON：{"characters":[{"role":"","appearance":"","clothing":""}]}。所有女性必须明确写成 22–30 岁的年轻成年亚洲女性，漂亮自然，身材匀称或曲线自然；不得出现中年、熟妇或 31 岁以上女性。服装按角色轮换日常修身裙装、亮色或有光泽的派对私服、短袖配及膝裙，但必须常规圆领或高圆领、胸线完整遮挡、面料不透明；禁止低胸、深 V、透视、抹胸、细肩带、制服和夸张开衩。多位女性造型必须可区分。男性必须是成年亚洲男性，普通成熟面容，体型从普通偏胖、微胖、壮实或瘦小中选择，只穿短袖、T恤、Polo、牛仔裤、休闲短裤或普通长裤；禁止年轻男模和高大帅气描述。文字用中文，每个字段一句简短描述。` }, {
               role: 'user', content: JSON.stringify({ roles: starter.map(x => x.role), requestedPreferences: job.outfitPreferences || {}, avoidRecent: job.recentCharacters || [] })
             }]
           })
@@ -100,6 +100,36 @@ export function createProvider({ apiKey, model }) {
       }, 90000);
       const content = data?.data?.choices?.[0]?.message?.content || data?.choices?.[0]?.message?.content;
       return cleanDraft(content);
+    },
+    async draftKeyframePrompts(input) {
+      if (!promptModel) throw new Error('请先配置提示词大模型');
+      const count = Math.max(1, Math.min(100, Number(input.count) || 1));
+      const data = await request('/v1/chat/completions', {
+        method: 'POST', body: JSON.stringify({
+          model: promptModel, stream: false, temperature: 0.9, max_tokens: Math.min(12000, 500 + count * 160), response_format: { type: 'json_object' },
+          messages: [{ role: 'system', content: `你是上门足浴短视频的人物提示词策划。输出严格 JSON：{"items":[{"appearance":"","clothing":""}]}，items 必须恰好 ${count} 条。每条必须明确写出 22–32 岁的年轻成年亚洲女性，不得出现 33 岁以上、中年、熟妇或老年外貌。人物必须明显不同：轮换具体年龄、脸型、眼型、眉形、鼻形、发型、发长、发色细微变化、体型和气质；不得用同一句换词冒充不同人物。服装必须彼此不同，使用日常得体的修身短袖、常规领连衣裙、高圆领 T 恤配及膝裙等，不穿工服或制服。每套服装必须常规圆领或高圆领、胸线完整遮挡、不透明；禁止低胸、深 V、乳沟、透视、露乳、抹胸、超短裙和夸张开衩。不要写场景、动作、镜头、品牌或解释，只返回 JSON。` }, {
+            role: 'user', content: JSON.stringify({ count, sceneMode: input.sceneMode, focusMode: input.focusMode, footMode: input.footMode, userDirection: input.userDirection || '', retryInstruction: input.retryInstruction || '', uniqueness: '所有 appearance + clothing 组合必须唯一，且相邻人物差异优先明显' })
+          }]
+        })
+      }, 120000);
+      const content = data?.data?.choices?.[0]?.message?.content || data?.choices?.[0]?.message?.content;
+      try { return JSON.parse(String(content || '').replace(/^```(?:json)?\s*|\s*```$/g, '').trim()); }
+      catch { throw new Error('提示词大模型未返回有效人物 JSON'); }
+    },
+    async draftStoryPrompts(input) {
+      if (!promptModel) throw new Error('请先配置提示词大模型');
+      const count = Math.max(1, Math.min(30, Number(input.count) || 1));
+      const data = await request('/v1/chat/completions', {
+        method: 'POST', body: JSON.stringify({
+          model: promptModel, stream: false, temperature: 0.88, max_tokens: Math.min(12000, 700 + count * 260), response_format: { type: 'json_object' },
+          messages: [{ role: 'system', content: `你是 15 秒中文短剧广告策划。输出严格 JSON：{"items":[{"title":"","dialogueA":"","dialogueB":"","adLine":"","action":""}]}，items 必须恰好 ${count} 条。每条只有两名成年人、三句极短对白：甲先质疑或争执，乙反驳，乙最后自然说出甲方名称和用户提供的真实卖点形成反转。每句适合 4 秒内说完，不辱骂、不打架。不同条目的冲突起因、台词和动作必须不同。不得编造用户资料以外的价格、收益、承诺、资质或官方背书。不要写镜头、时长和解释。` }, {
+            role: 'user', content: JSON.stringify(input)
+          }]
+        })
+      }, 120000);
+      const content = data?.data?.choices?.[0]?.message?.content || data?.choices?.[0]?.message?.content;
+      try { return JSON.parse(String(content || '').replace(/^```(?:json)?\s*|\s*```$/g, '').trim()); }
+      catch { throw new Error('提示词大模型未返回有效短剧 JSON'); }
     },
     async submit(job) {
       const payload = { model: job.videoModel || videoModel, prompt: job.prompt, size: job.ratio || process.env.VIDEO_SIZE || '9:16', duration: Number(job.duration) || Number(process.env.VIDEO_DURATION) || 6, resolution: String(job.resolution || process.env.VIDEO_RESOLUTION || '480P').toLowerCase() };
@@ -130,7 +160,7 @@ export function createProvider({ apiKey, model }) {
         method: 'POST', body: JSON.stringify({
           model: sceneAnalysisModel, stream: false, temperature: 0.1, max_tokens: 900,
           response_format: { type: 'json_object' },
-          messages: [{ role: 'system', content: `你是固定底图空间分析器。只报告图片中真实可见的空间，不推测被遮挡处，不增加门、通道、刷卡器或装饰。输出严格 JSON：{"spaceType":"","description":"","fixedView":"","walkableAreas":[""],"doors":[{"position":"","cardAccess":false,"nearby":false}],"entrancesExits":[""],"perspective":"","maxPeople":1,"sceneTags":[""]}。sceneTags 只能从 corridor, visible_door, visible_card_door, nearby_visible_door, clear_walkway, side_area 中选择。maxPeople 只能是 1、2 或 3。只有看得清刷卡器才标 visible_card_door；只有近处门和连续路线都明确才标 nearby_visible_door；只有足以让三人原地停留才标 side_area。description 用中文客观描述固定构图、光线、门和通道。` }, {
+          messages: [{ role: 'system', content: `你是固定底图空间分析器。只报告图片中真实可见的空间，不推测被遮挡处，不增加门、通道、刷卡器、家具或装饰。输出严格 JSON：{"spaceType":"","description":"","fixedView":"","walkableAreas":[""],"doors":[{"position":"","cardAccess":false,"nearby":false}],"entrancesExits":[""],"perspective":"","maxPeople":1,"sceneTags":[""]}。sceneTags 只能从 corridor, visible_door, visible_card_door, nearby_visible_door, clear_walkway, side_area, ktv_private_room, karaoke_screen, microphone, sofa_area, low_table, song_selector, clear_floor, ktv_lobby, reception_desk 中选择。maxPeople 只能是 1–5。只有看得清刷卡器才标 visible_card_door；只有近处门和连续路线都明确才标 nearby_visible_door；只有足以让三人停留才标 side_area；只有明确看见 KTV 包厢特征才标 ktv_private_room；屏幕、麦克风、沙发区、矮桌、点歌台、KTV 大厅和前台都必须真实可见才标记。description 用中文客观描述固定构图、光线、家具、门和通道。` }, {
             role: 'user', content: [{ type: 'text', text: '分析这张固定底图，只返回 JSON。' }, { type: 'image_url', image_url: { url: imageUrl } }]
           }]
         })
@@ -149,6 +179,14 @@ export function createProvider({ apiKey, model }) {
       if (!task?.task_id) throw new Error('APIMart 生图接口未返回任务 ID');
       return { id: task.task_id, status: 'waiting' };
     },
+    async submitKeyframe(prompt) {
+      const data = await request('/v1/images/generations', { method: 'POST', body: JSON.stringify({
+        model: imageModel, prompt, resolution: process.env.IMAGE_RESOLUTION || '1k', quality: process.env.IMAGE_QUALITY || 'high', n: 1, output_format: 'png'
+      }) }, 60000);
+      const task = data?.data?.[0];
+      if (!task?.task_id) throw new Error('APIMart 生图接口未返回任务 ID');
+      return { id: task.task_id, status: 'waiting' };
+    },
     async imageTransformStatus(id) {
       const data = await request(`/v1/tasks/${encodeURIComponent(id)}?language=zh`);
       const task = data?.data || {};
@@ -156,6 +194,16 @@ export function createProvider({ apiKey, model }) {
       const imageUrls = urls(task.result?.images).map(x => x.url);
       return { status: state, url: imageUrls[0] || '', error: task.error?.message || '' };
     },
-    async health() { return '已配置'; }
+    async keyframeStatus(id) {
+      const data = await request(`/v1/tasks/${encodeURIComponent(id)}?language=zh`);
+      const task = data?.data || {};
+      const state = { submitted: 'waiting', pending: 'waiting', processing: 'running', completed: 'complete', failed: 'error' }[task.status] || 'waiting';
+      const imageUrls = urls(task.result?.images).map(x => x.url);
+      return { status: state, url: imageUrls[0] || '', error: task.error?.message || '' };
+    },
+    async health() {
+      await request('/v1/models', {}, 15000);
+      return 'APIMart 已连接';
+    }
   };
 }

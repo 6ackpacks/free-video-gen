@@ -11,7 +11,16 @@ const aliases = {
   visible_door: ['visible_door', 'visible_card_door', 'nearby_visible_door'],
   clear_walkway: ['clear_walkway'],
   side_area: ['side_area'],
-  corridor: ['corridor']
+  corridor: ['corridor'],
+  ktv_private_room: ['ktv_private_room'],
+  karaoke_screen: ['karaoke_screen'],
+  microphone: ['microphone'],
+  sofa_area: ['sofa_area'],
+  low_table: ['low_table'],
+  song_selector: ['song_selector'],
+  clear_floor: ['clear_floor', 'clear_walkway'],
+  ktv_lobby: ['ktv_lobby'],
+  reception_desk: ['reception_desk']
 };
 
 function frontmatter(text) {
@@ -35,8 +44,8 @@ function section(body, heading) {
   return match?.[1]?.trim() || '';
 }
 
-export function loadActionTemplates(directory = actionSkillDirectory) {
-  const actionsDir = path.join(directory, 'actions');
+export function loadActionTemplates(directory = actionSkillDirectory, options = {}) {
+  const actionsDir = path.basename(directory) === 'actions' ? directory : path.join(directory, 'actions');
   if (!fs.existsSync(actionsDir)) throw new Error(`动作模板目录不存在：${actionsDir}`);
   const result = fs.readdirSync(actionsDir).filter(name => /^action-\d{2}.*\.md$/.test(name)).sort().map(filename => {
     const { values, body } = frontmatter(fs.readFileSync(path.join(actionsDir, filename), 'utf8'));
@@ -44,13 +53,18 @@ export function loadActionTemplates(directory = actionSkillDirectory) {
     if (!values.id || !values.name || !actionText) throw new Error(`动作模板字段不完整：${filename}`);
     return {
       id: String(values.id), name: String(values.name), people: Number(values.people),
+      roles: Array.isArray(values.roles) ? values.roles : [],
+      characterProfile: String(values.character_profile || 'foot-spa'),
+      renderProfile: String(values.render_profile || 'surveillance'),
       sceneTags: Array.isArray(values.scene_tags) ? values.scene_tags : [],
       endState: String(values.end_state || section(body, '结束状态')),
       actionText, summary: actionText.slice(0, 72) + (actionText.length > 72 ? '…' : ''),
       selectionEnabled: true, source: filename
     };
   });
-  if (result.length !== 14 || new Set(result.map(x => x.id)).size !== 14) throw new Error('动作模板必须是 14 个且 ID 唯一');
+  const expectedCount = Number(options.expectedCount || (path.resolve(directory) === path.resolve(actionSkillDirectory) ? 14 : 0));
+  if (expectedCount && result.length !== expectedCount) throw new Error(`动作模板必须是 ${expectedCount} 个`);
+  if (new Set(result.map(x => x.id)).size !== result.length) throw new Error('动作模板 ID 必须唯一');
   return result;
 }
 
@@ -63,6 +77,6 @@ export function compatibility(template, sceneProfile) {
   return { compatible: reasons.length === 0, reasons };
 }
 
-export function templatesWithCompatibility(sceneProfile) {
-  return loadActionTemplates().map(template => ({ ...template, compatibility: compatibility(template, sceneProfile) }));
+export function templatesWithCompatibility(sceneProfile, directory = actionSkillDirectory, options = {}) {
+  return loadActionTemplates(directory, options).map(template => ({ ...template, compatibility: compatibility(template, sceneProfile) }));
 }

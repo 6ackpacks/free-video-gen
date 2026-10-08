@@ -19,5 +19,6 @@ if not exist "data\api-key.dpapi" (
   echo 尚未配置 APIMart/Qwen 密钥。工作台可以打开，但场景分析与视频生成暂不可用。
   echo 需要配置时运行：pwsh -File setup-key.ps1
 )
+echo 工作台会自动检查并启动内置 DoubaoManager，首次运行可能需要下载组件和浏览器。
 call npm run desktop
 pause

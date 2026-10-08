@@ -104,7 +104,7 @@ export class MediaStore {
   }
   start(trial, jobs) {
     if (this.runs.get(trial.id)?.running) return this.status(trial.id, jobs);
-    const state = { running: true, total: jobs.length, complete: jobs.filter(j => fs.existsSync(this.filename(j))).length, errors: [] };
+    const state = { running: true, jobIds: jobs.map(job => job.id), total: jobs.length, complete: jobs.filter(j => fs.existsSync(this.filename(j))).length, errors: [] };
     this.runs.set(trial.id, state);
     const remaining = jobs.filter(j => !fs.existsSync(this.filename(j)));
     const workers = Array.from({ length: Math.min(1, remaining.length) }, async () => {
@@ -117,18 +117,26 @@ export class MediaStore {
     Promise.all(workers).finally(() => { state.running = false; });
     return this.status(trial.id, jobs);
   }
+  runJobs(id, jobs) {
+    const ids = this.runs.get(id)?.jobIds;
+    if (!Array.isArray(ids) || !ids.length) return jobs;
+    const selected = new Set(ids);
+    return jobs.filter(job => selected.has(job.id));
+  }
   status(id, jobs) {
     const state = this.runs.get(id);
-    const complete = jobs.filter(job => fs.existsSync(this.filename(job))).length;
-    return { running: !!state?.running, total: jobs.length, complete, errors: state?.errors || [], ready: jobs.length > 0 && complete === jobs.length };
+    const selected = this.runJobs(id, jobs);
+    const complete = selected.filter(job => fs.existsSync(this.filename(job))).length;
+    return { running: !!state?.running, total: selected.length, complete, errors: state?.errors || [], ready: selected.length > 0 && complete === selected.length };
   }
-  async archive(jobs, res) {
+  async archive(jobs, res, filename = 'videos.zip') {
     const entries = [];
     let offset = 0;
     if (jobs.some(job => !fs.existsSync(this.filename(job)))) throw new Error('视频尚未全部保存到本机');
     const totalBytes = jobs.reduce((sum, job) => sum + fs.statSync(this.filename(job)).size + 100, 0);
     if (jobs.length > 65535 || totalBytes > 0xffffffff) throw new Error('ZIP 超过 4GB，请分批下载');
-    res.writeHead(200, { 'Content-Type': 'application/zip', 'Content-Disposition': 'attachment; filename="videos.zip"', 'Cache-Control': 'no-store' });
+    const safeName = String(filename || 'videos.zip').replace(/[^a-zA-Z0-9._-]/g, '_');
+    res.writeHead(200, { 'Content-Type': 'application/zip', 'Content-Disposition': `attachment; filename="${safeName}"`, 'Cache-Control': 'no-store' });
     for (let i = 0; i < jobs.length; i++) {
       const file = this.filename(jobs[i]);
       const name = Buffer.from(`video-${String(i + 1).padStart(3, '0')}.mp4`);

@@ -40,7 +40,7 @@ export class ImageTransformManager {
         if (!response.ok) throw new Error(`生成图片下载失败：HTTP ${response.status}`);
         const bytes = Buffer.from(await response.arrayBuffer());
         const mime = String(response.headers.get('content-type') || 'image/png').split(';')[0];
-        const ref = this.references.addBuffer({ name: `监控底图 ${item.timestamp}`, mime: ['image/jpeg', 'image/png', 'image/webp'].includes(mime) ? mime : 'image/png', bytes, derivedFrom: item.referenceId, timestamp: item.timestamp });
+        const ref = this.references.addBuffer({ name: `监控底图 ${item.timestamp}`, mime: ['image/jpeg', 'image/png', 'image/webp'].includes(mime) ? mime : 'image/png', bytes, derivedFrom: item.referenceId, timestamp: item.timestamp, purpose: 'store-background' });
         item.resultReferenceId = ref.id;
         try { await this.references.analyze(ref.id); } catch (error) { item.analysisError = error.message || String(error); }
       } catch (error) { item.status = 'error'; item.error = error.message || String(error); }

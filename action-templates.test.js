@@ -6,6 +6,7 @@ import { TrialManager } from './trials.js';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { contentPackActionDirectory, getContentPack } from './content-packs.js';
 
 const fullScene = {
   spaceType: '走廊', description: '固定高位视角下的真实走廊，右侧有一扇带刷卡器的近处房门，中央通道连续可行走，左侧可供三人停留。',
@@ -17,6 +18,16 @@ test('loads exactly fourteen stable action templates', () => {
   assert.equal(templates.length, 14);
   assert.deepEqual(templates.map(x => x.id), Array.from({ length: 14 }, (_, i) => `action-${String(i + 1).padStart(2, '0')}`));
   assert.ok(templates.every(x => x.actionText && x.endState && x.sceneTags.length));
+});
+
+test('KTV 内容包装载十二个锁定动作且人物角色完整', () => {
+  const pack = getContentPack('ktv-business');
+  const templates = loadActionTemplates(contentPackActionDirectory(pack), { expectedCount: 12 });
+  assert.equal(templates.length, 12);
+  assert.ok(templates.every(item => item.characterProfile === 'ktv-business'));
+  assert.ok(templates.every(item => item.roles.length === item.people));
+  assert.ok(templates.some(item => item.sceneTags.includes('ktv_private_room')));
+  assert.ok(templates.some(item => item.sceneTags.includes('ktv_lobby')));
 });
 
 test('compatibility excludes templates requiring missing real space', () => {

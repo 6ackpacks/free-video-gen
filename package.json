@@ -4,7 +4,20 @@
   "private": true,
   "type": "module",
   "main": "electron/main.js",
-  "scripts": {"start": "node --use-env-proxy --env-file=project.env server.js", "desktop": "electron .", "test": "node --test", "batch": "node run-batch.mjs"},
-  "devDependencies": {"electron": "^44.4.5"},
-  "engines": {"node": ">=24"}
+  "scripts": {
+    "start": "node --env-file=project.env server.js",
+    "start:proxy": "node --use-env-proxy --env-file=project.env server.js",
+    "desktop": "electron .",
+    "test": "node --test",
+    "batch": "node run-batch.mjs"
+  },
+  "devDependencies": {
+    "electron": "^44.4.5"
+  },
+  "engines": {
+    "node": ">=23"
+  },
+  "dependencies": {
+    "undici": "^7.30.0"
+  }
 }

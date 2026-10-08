@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "id": "ktv-business",
+  "name": "商务 KTV 社交",
+  "navLabel": "KTV",
+  "order": 30,
+  "family": "ktv",
+  "engine": "background-variants",
+  "status": "active",
+  "description": "固定 KTV 包厢、大厅或走廊底图，生成年轻成年女性与男性宾客唱歌、碰杯、游戏和迎宾视频。",
+  "scenes": [
+    { "id": "ktv-private-room", "name": "KTV 包厢", "requiredEvidence": ["ktv-private-room", "sofa-area"] },
+    { "id": "ktv-lobby", "name": "KTV 大厅", "requiredEvidence": ["ktv-lobby", "clear-walkway"] },
+    { "id": "ktv-corridor", "name": "KTV 走廊", "requiredEvidence": ["corridor", "visible-door"] }
+  ],
+  "actionLibrary": "prompt-skills/ktv-video-prompt-skill/actions",
+  "expectedActionCount": 12,
+  "policies": {
+    "referenceRole": "locked-background",
+    "humanReview": ["scene-analysis", "trial-video"],
+    "character": "all-adults-young-women-22-30",
+    "audio": "lively-karaoke-instrumental"
+  }
+}

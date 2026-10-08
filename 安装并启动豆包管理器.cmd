@@ -1,22 +1,5 @@
 @echo off
-setlocal
 cd /d "%~dp0"
-if not exist "integrations\DoubaoManager\run.bat" (
-  where git >nul 2>&1
-  if errorlevel 1 (
-    echo 请先安装 Git，然后重新双击本脚本。
-    pause
-    exit /b 1
-  )
-  if not exist "integrations" mkdir "integrations"
-  echo 正在从原项目下载 DoubaoManager...
-  git clone --depth 1 https://github.com/shukeCyp/DoubaoManager.git "integrations\DoubaoManager"
-  if errorlevel 1 (
-    echo 下载失败，请检查网络后重试。
-    pause
-    exit /b 1
-  )
-)
-cd /d "integrations\DoubaoManager"
-call run.bat
-endlocal
+echo DoubaoManager 已经合并为工作台的内置后台服务，不需要单独启动。
+echo 现在将启动“帧间”工作台；首次运行会自动下载并准备豆包组件。
+call "启动工作台.cmd"
