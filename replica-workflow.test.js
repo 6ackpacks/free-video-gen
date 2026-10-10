@@ -1,0 +1,15 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import {normalizeReplica,replicaPrompts,ReplicaSources} from './replica-workflow.js';
+import {WorkspaceState} from './workspace-state.js';
+const replica={template:'{{人物}}在{{场景}}行动，{{duration}}秒。',variables:[{key:'人物',values:['甲','乙']},{key:'场景',values:['店铺','走廊']}],fixedRules:['固定俯视'],beats:[{start:0,end:.5,action:'{{人物}}站在门口'},{start:.5,end:1,action:'走入{{场景}}'}]};
+const route={id:'doubao',model:'mini',configured:true,duration:{min:5,max:15,values:[5,10,15]},resolutions:['由豆包决定'],referenceMode:'reference-image'};
+const input={replica,count:4,duration:15,ratio:'9:16',resolution:'由豆包决定'};
+test('模板显式变量完整、名称唯一、时间顺序合法',()=>{assert.throws(()=>normalizeReplica({...replica,template:'{{不存在}}'}),/未配置变量/);assert.throws(()=>normalizeReplica({...replica,variables:[...replica.variables,replica.variables[0]]}),/变量重复/);assert.throws(()=>normalizeReplica({...replica,beats:[{start:.8,end:.4,action:'错误'}]}),/区间/)});
+test('批量按候选组合轮换且相对节奏换算秒数',()=>{const result=replicaPrompts(input,route);assert.equal(result.combinations,4);assert.equal(new Set(result.prompts.map(p=>p.prompt)).size,4);assert.match(result.prompts[0].prompt,/7.5–15秒/);assert.equal(result.prompts[0].lockedPrompt,true);assert.equal(result.prompts[0].generationMethod,'doubao');assert.equal(replicaPrompts({...input,count:5},route).repeated,true)});
+test('不支持的时长、参考图、过长豆包提示词在队列前拒绝',()=>{assert.throws(()=>replicaPrompts({...input,duration:30},route),/不支持/);assert.throws(()=>replicaPrompts({...input,replica:{template:'字'.repeat(2000)}},route),/过长/);assert.throws(()=>replicaPrompts({...input,referenceImageIds:['a'.repeat(36)]},{...route,referenceMode:'visual-brief'}),/不支持图片/)});
+test('我的预设保存更新与重启恢复，保留旧版预设',()=>{const dir=fs.mkdtempSync(path.join(os.tmpdir(),'replica-'));try{const file=path.join(dir,'ui.json'),store=new WorkspaceState(file);store.addPreset({name:'原有设置',page:'/story',fields:{count:2}});const preset=store.saveReplica({name:'复刻',replica});store.saveReplica({id:preset.id,name:'更新',replica});const loaded=new WorkspaceState(file);assert.equal(loaded.state.presets.length,2);assert.equal(loaded.state.presets[0].name,'更新');assert.equal(loaded.state.presets[0].replica.variables[0].values[1],'乙')}finally{fs.rmSync(dir,{recursive:true,force:true})}});
+test('关键帧本地存储、读取、越界与恶意路径拒绝',()=>{const dir=fs.mkdtempSync(path.join(os.tmpdir(),'replica-source-'));try{const sources=new ReplicaSources(dir),dataUrl='data:image/jpeg;base64,'+Buffer.from([255,216,255,217]).toString('base64');const source=sources.add({name:'参考',duration:6,frames:[0,2,4].map(time=>({time,dataUrl}))});assert.equal(new ReplicaSources(dir).get(source.id).frames.length,3);assert.equal(sources.vision(source.id).frames[1].dataUrl,dataUrl);assert.throws(()=>sources.frame(source.id,9),/不存在/);assert.throws(()=>sources.frame('../',0),/不存在/)}finally{fs.rmSync(dir,{recursive:true,force:true})}});

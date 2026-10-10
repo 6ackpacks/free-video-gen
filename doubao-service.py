@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import os
 import secrets
 import sys
 import time
@@ -13,6 +14,48 @@ from uuid import uuid1, uuid4
 
 import uvicorn
 from fastapi import Header, HTTPException
+
+
+def configure_browser_fallback() -> None:
+    """Use an installed Edge when the transferred Playwright browser is absent."""
+    from playwright.sync_api import BrowserType
+    edge = Path(os.environ.get('PROGRAMFILES(X86)', r'C:\Program Files (x86)')) / 'Microsoft/Edge/Application/msedge.exe'
+    if sys.platform != 'win32' or not edge.exists():
+        return
+    original = BrowserType.launch_persistent_context
+    def launch(browser, *args, **kwargs):
+        if browser.name == 'chromium' and not kwargs.get('executable_path') and not kwargs.get('channel'):
+            kwargs['executable_path'] = str(edge)
+        return original(browser, *args, **kwargs)
+    BrowserType.launch_persistent_context = launch
+
+
+def quota_window_without_tzdata(now, reset_value):
+    """China's current daily quotas use UTC+8; do not require Windows tzdata."""
+    from datetime import UTC, datetime, time as dt_time, timedelta, timezone
+    local_tz = timezone(timedelta(hours=8))
+    instant = now.replace(tzinfo=UTC) if now.tzinfo is None else now
+    local_now = instant.astimezone(local_tz)
+    hour, minute = map(int, reset_value.split(':'))
+    reset = datetime.combine(local_now.date(), dt_time(hour, minute), local_tz)
+    before_reset = local_now < reset
+    business_date = local_now.date() - timedelta(days=1) if before_reset else local_now.date()
+    next_reset = reset if before_reset else reset + timedelta(days=1)
+    return business_date, next_reset.astimezone(UTC).replace(tzinfo=None)
+
+
+def install_task_runtime_fixes(module):
+    module.quota_window = quota_window_without_tzdata
+    original = module.VideoTaskService._run
+    async def guarded_run(service, task_id, cancellation):
+        try:
+            await original(service, task_id, cancellation)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            service.repository.update_video_task(task_id, status='failed', error_message=f'豆包调度失败：{exc}')
+            service.logger.exception('豆包调度失败')
+    module.VideoTaskService._run = guarded_run
 
 
 def install_exclusive_account_scheduler(repository) -> None:
@@ -140,6 +183,8 @@ def install_session_import_route(app, token, repository, settings) -> None:
             return await asyncio.to_thread(import_profile, payload)
         except ValueError as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(status_code=503, detail=f'账号同步失败：{str(exc)[:500]}') from exc
 
     # create_app ends with a catch-all SPA route; the API route must precede it.
     route = app.router.routes.pop()
@@ -334,6 +379,7 @@ def main() -> None:
     from doupool.paths import configure_runtime_environment
 
     configure_runtime_environment()
+    configure_browser_fallback()
 
     from doupool.api.app import create_app
     from doupool.config import Settings
@@ -344,7 +390,9 @@ def main() -> None:
     from doupool.logging.setup import configure_logging
     from doupool.settings.service import SettingsService
     import doupool.video.browser as video_browser
-    from doupool.video.service import VideoTaskService
+    import doupool.video.service as task_service
+    install_task_runtime_fixes(task_service)
+    VideoTaskService = task_service.VideoTaskService
 
     settings = Settings.from_environment()
     settings.data_dir.mkdir(parents=True, exist_ok=True)

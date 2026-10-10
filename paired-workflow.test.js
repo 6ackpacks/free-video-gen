@@ -3,19 +3,20 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { FEMALE_CLOTHES, FEMALE_WARDROBE_RULES } from './wardrobe-rules.js';
 import { hasForbiddenAppearance, planPromptPairs } from './paired-prompts.js';
 import { planPairedVideoJobs } from './paired-batches.js';
 import { KeyframeBatchManager } from './keyframe-batches.js';
-import { draftKeyframePromptBatch, hasOutOfRangeFemaleAge } from './prompt-batches.js';
+import { draftKeyframePromptBatch, hasOutOfRangeFemaleAge, validateReviewedPromptItems } from './prompt-batches.js';
 import { TrialManager, buildFixedMassagePrompt } from './trials.js';
 import { buildFlexibleVideoDirection } from './video-directions.js';
 
-test('家庭模板只使用沙发或床并锁定非低胸要求', () => {
+test('家庭模板只使用沙发或床并应用用户认可的服装库', () => {
   const pairs = planPromptPairs({ count: 24, variantKey: 'diversity-check', sceneMode: 'mixed', focusMode: 'mixed', footMode: 'mixed' });
   assert.equal(pairs.length, 24);
   assert.ok(pairs.every(x => ['sofa', 'bed'].includes(x.variation.home)));
-  assert.ok(pairs.every(x => /禁止低胸/.test(x.imagePrompt)));
-  assert.ok(pairs.every(x => /不穿工服或制服/.test(x.imagePrompt)));
+  assert.ok(pairs.every(x => /用户认可的 30 套/.test(x.imagePrompt)));
+  assert.ok(pairs.every(x => /用户认可的 30 套/.test(x.imagePrompt)));
   assert.ok(pairs.every(x => /伊趣舒心/.test(x.imagePrompt)));
   assert.ok(pairs.every(x => /禁止拼图/.test(x.imagePrompt)));
   assert.ok(pairs.every(x => /一个连续家庭空间和一位技师/.test(x.imagePrompt)));
@@ -34,6 +35,13 @@ test('家庭按摩拒绝显式超龄女性', () => {
   assert.equal(hasOutOfRangeFemaleAge('中年亚洲女性'), true);
 });
 
+test('审核后的提示词提交图片不再被年龄规则拦截', () => {
+  const [pair] = planPromptPairs({ count: 1 });
+  pair.identityKey = 'reviewed-person';
+  pair.imagePrompt = pair.imagePrompt.replace('22–32 岁', '36 岁');
+  assert.equal(validateReviewedPromptItems([pair])[0].imagePrompt, pair.imagePrompt);
+});
+
 test('提示词大模型返回超龄女性时整批拒绝', async () => {
   const provider = { draftKeyframePrompts: async () => ({ items: [{ appearance: '36岁亚洲女性，短发', clothing: '常规圆领连衣裙' }] }) };
   await assert.rejects(() => draftKeyframePromptBatch({ count: 1 }, provider), /年龄不在 22–32 岁/);
@@ -47,7 +55,7 @@ test('提示词大模型批次要求每个人物外貌唯一', async () => {
   const result = await draftKeyframePromptBatch({ count: 3, variantKey: 'llm-prompts' }, provider);
   assert.equal(result.items.length, 3);
   assert.equal(new Set(result.items.map(x => x.identityKey)).size, 3);
-  assert.ok(result.items.every(x => /禁止低胸/.test(x.imagePrompt)));
+  assert.ok(result.items.every(x => /用户认可的 30 套/.test(x.imagePrompt)));
   const duplicateProvider = { draftKeyframePrompts: async () => ({ items: [
     { appearance: '同一个成年女性，圆脸长发', clothing: '高圆领黑色短袖配及膝裙' },
     { appearance: '同一个成年女性，圆脸长发', clothing: '常规领墨绿色中长裙' }
@@ -55,10 +63,11 @@ test('提示词大模型批次要求每个人物外貌唯一', async () => {
   await assert.rejects(() => draftKeyframePromptBatch({ count: 2 }, duplicateProvider), /人物与前文重复/);
 });
 
-test('安全约束允许否定禁词但仍拒绝真实违规穿着', () => {
+test('服装检查允许新款式且不阻止低胸与制服搭配', () => {
   assert.equal(hasForbiddenAppearance('成年女性，常规圆领连衣裙，不穿工服或制服'), false);
   assert.equal(hasForbiddenAppearance('成年女性，高圆领上衣，无低胸设计'), false);
-  assert.equal(hasForbiddenAppearance('成年女性，深 V 低胸制服'), true);
+  assert.equal(hasForbiddenAppearance('成年女性，深 V 低胸制服'), false);
+  for(const outfit of ['收腰接待制服裙','正面高领露背裙','露腰上装配包臀裙','立领旗袍','高腰百褶裙'])assert.equal(hasForbiddenAppearance('25岁成年女性，'+outfit),false);
 });
 
 test('脚部可以完整、局部或不露出，且人像重点可单独选择', () => {
@@ -165,3 +174,12 @@ test('首帧审核确认后才创建对应视频任务', async t => {
   assert.match(queued[0].prompt, /按摩背部/);
   assert.match(queued[0].prompt, /配上优雅暧昧的音乐/);
 });
+
+ test('30 套指定服装均可通过提示词生成检查和图片提交', async () => {
+  assert.equal(FEMALE_CLOTHES.length, 30);
+  assert.match(FEMALE_WARDROBE_RULES, /明确成年女性/);
+  const provider = { draftKeyframePrompts: async () => ({items:FEMALE_CLOTHES.map((clothing,i)=>({appearance:`25岁成年亚洲女性，人物造型 ${i}`,clothing}))}) };
+  const result = await draftKeyframePromptBatch({count:30},provider);
+  assert.equal(validateReviewedPromptItems(result.items).length,30);
+  for(const item of result.items)assert.doesNotMatch(item.imagePrompt,/禁止低胸|不穿工服或制服/);
+ });

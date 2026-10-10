@@ -1,3 +1,4 @@
+import { FEMALE_CLOTHES, FEMALE_WARDROBE_RULES } from './wardrobe-rules.js';
 import { createHash, randomUUID } from 'node:crypto';
 
 const homeSetups = [
@@ -21,15 +22,8 @@ const femaleLooks = [
   '31岁年轻成年亚洲女性，柔和鹅蛋脸，黑色微卷长发，曲线自然'
 ];
 
-// Uniforms and low-cut structures are intentionally excluded.
-const femaleClothes = [
-  '酒红色高圆领修身短袖上衣配黑色及膝包臀裙和低跟鞋，合身得体、胸线完整遮挡',
-  '墨绿色常规圆领修身中长裙配细腰带和低跟鞋，剪裁得体、领口不低',
-  '米白色高领短袖上衣配深棕色及膝短裙和低跟鞋，面料不透明',
-  '黑色高圆领修身 T 恤配酒红色及膝包臀裙和低跟鞋，衣料不透明',
-  '暗紫色常规领修身中长裙配细带低跟鞋，肩背与胸口有完整面料覆盖',
-  '象牙白常规圆领短袖上衣配深棕色及膝短裙和低跟鞋，整体合身得体'
-];
+// Shared adult fitted wardrobe options.
+const femaleClothes = FEMALE_CLOTHES;
 
 const homeDetails = [
   '傍晚暖色家用顶灯，茶几上有水杯和水果，生活气息自然',
@@ -78,8 +72,8 @@ export const YIQU_TEMPLATE = {
 
 export const DEFAULT_VIDEO_BGM = '配上优雅暧昧的音乐。音乐为无歌词纯音乐；无对白、无耳语、无可听见的人声。';
 
-export const FORBIDDEN_APPEARANCE = /(低胸|深\s*v|乳沟|透视|露乳|抹胸|工服|制服|超短裙)/i;
-const NEGATED_FORBIDDEN_APPEARANCE = /(?:不穿|不得穿|禁止穿|避免穿|没有|无|非)(?:任何)?(?:低胸|深\s*v|乳沟|透视|露乳|抹胸|工服|制服|超短裙)(?:(?:或|和|、)(?:低胸|深\s*v|乳沟|透视|露乳|抹胸|工服|制服|超短裙))*/gi;
+export const FORBIDDEN_APPEARANCE = /(露乳|裸露乳头|露点|裸露私密部位)/i;
+const NEGATED_FORBIDDEN_APPEARANCE = /(?:不|不得|禁止|避免|没有|无|非)(?:出现)?(?:露乳|裸露乳头|露点|裸露私密部位)/gi;
 
 export function hasForbiddenAppearance(value) {
   return FORBIDDEN_APPEARANCE.test(String(value || '').replace(NEGATED_FORBIDDEN_APPEARANCE, ''));
@@ -106,7 +100,7 @@ export function planPromptPairs(input = {}) {
     const clothing = pick(femaleClothes, Math.floor(batchSeed / 5), offset);
     const shot = pick(shotPool, Math.floor(batchSeed / 7), offset);
     const detail = pick(homeDetails, Math.floor(batchSeed / 11), offset);
-    const identity = `${appearance}，是一名上门足浴技师，穿${clothing}。人物身份、脸型、发型与上一条不同，不穿工服或制服。她在左胸佩戴独立简洁工牌，工牌准确写着“${brandText}”。`;
+    const identity = `${appearance}，是一名上门足浴技师，穿${clothing}。人物身份、脸型、发型与上一条不同，服装采用艳丽修身剪裁，从用户认可的 30 套服装搭配中选择。她在左胸佩戴独立简洁工牌，工牌准确写着“${brandText}”。`;
     const imagePrompt = [
       '生成一张真实手机随手拍质感的 9:16 竖版视频视觉参考图；它用于确定人物、服装、家庭场景和服务关系，不要求后续视频从这张静态姿势开始。不要影棚感、广告棚拍感或统一样板图感。',
       '只允许一张完整的单幅照片、一个连续家庭空间和一位技师；禁止拼图、三联画、分镜、网格、多画面、多机位并排、同一人物重复出现或多个场景合成。',
@@ -115,15 +109,15 @@ export function planPromptPairs(input = {}) {
       identity,
       '技师身体自然前倾，双手正在进行专业、自然的足部按摩；即使脚部被裁切，也必须通过手部位置、身体姿态、视线方向和第一人称关系让观众理解她正在给顾客按摩脚。',
       `品牌文字只出现在胸牌上，必须是完整清晰的“${brandText}”四个中文字，不得变形或出现错别字。`,
-      '硬性服装安全约束：常规圆领或高圆领，胸线完整遮挡；禁止低胸、深 V、乳沟、透视、露乳、夸张开衩和工服制服。',
+      `服装规则：${FEMALE_WARDROBE_RULES}`,
       '技师必须是 22–32 岁的年轻成年女性，不得呈现中年或老年外貌。服务关系专业自然；双手、手指、腿脚结构准确，不出现多余或融合肢体。',
-      '禁止浴巾、专业脚凳、足浴椅、护理瓶罐、会所木格栅、酒店灯光、按摩店装修、统一制服、第三人称机位、水印和无关文字。',
+      '禁止浴巾、专业脚凳、足浴椅、护理瓶罐、会所木格栅、酒店灯光、按摩店装修、第三人称机位、水印和无关文字。',
       userImagePrompt
     ].filter(Boolean).join('\n');
     const videoPrompt = [
       '输入图片只作为人物、服装、家庭背景和服务关系的视觉参考，不锁定为视频第一帧，不复刻图片中的固定姿势。9:16 竖屏、单一连续镜头，保持第一人称顾客视角，不切换第三人称。',
       `技师整段持续做自然专业的足部按摩，任何时刻至少一只手接触、承托或按摩顾客脚部；动作小幅、连续、符合人体结构。胸牌“${brandText}”保持稳定，人物、服装和家庭环境不变化。`,
-      '禁止换人、换装、低胸化、转身背离顾客、中途停手、双手同时离开顾客脚部、把双手放在自己腿上、脚部或双手畸变、多手多脚、场景跳变、镜头漂移、文字变形和新增门店元素。',
+      '禁止换人、换装、转身背离顾客、中途停手、双手同时离开顾客脚部、把双手放在自己腿上、脚部或双手畸变、多手多脚、场景跳变、镜头漂移、文字变形和新增门店元素。',
       DEFAULT_VIDEO_BGM,
       userVideoPrompt
     ].filter(Boolean).join('\n');

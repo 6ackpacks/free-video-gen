@@ -31,6 +31,11 @@ test('Wan3 route submits first-frame jobs with simple user parameters', async ()
   await provider.submit({ prompt: '配上优雅暧昧的音乐', referenceImageUrl: 'data:image/png;base64,CC==', referenceMode: 'reference-image', seed: 12 });
   const audioPayload = JSON.parse(calls[2].options.body);
   assert.equal(audioPayload.parameters.audio, true);
+  await provider.submit({ prompt: '项链手镯外观参考，中文对白与背景音乐', referenceImageUrls: ['https://example.test/necklace.png', 'https://example.test/bracelet.png'], referenceMode: 'reference-image', duration: 30, ratio: '9:16' });
+  const multiPayload = JSON.parse(calls[3].options.body);
+  assert.deepEqual(multiPayload.input.media, [{ type: 'reference_image', url: 'https://example.test/necklace.png' }, { type: 'reference_image', url: 'https://example.test/bracelet.png' }]);
+  assert.equal(multiPayload.parameters.duration, 30);
+  assert.equal(multiPayload.parameters.ratio, '9:16');
   const status = await provider.status('task-1');
   assert.equal(status.status, 'complete');
   assert.equal(status.outputs[0].url, 'https://example.test/video.mp4');

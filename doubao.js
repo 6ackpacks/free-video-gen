@@ -44,7 +44,7 @@ export class DoubaoBridge {
   async request(route, options = {}) {
     const session = await this.discover();
     let response;
-    try { response = await fetch(session.origin + route, { ...options, headers: { 'X-Doupool-Token': session.token, ...(options.body ? { 'Content-Type': 'application/json' } : {}) }, signal: timeout(15000) }); }
+    try { response = await fetch(session.origin + route, { ...options, headers: { 'X-Doupool-Token': session.token, ...(options.body ? { 'Content-Type': 'application/json' } : {}) }, signal: timeout(route === '/api/accounts/import-session' ? 90000 : 15000) }); }
     catch { this.session = null; const error = new Error('豆包管理器已断开'); error.transient = true; throw error; }
     let data;
     try { data = await response.json(); } catch { data = {}; }
@@ -84,15 +84,19 @@ export class DoubaoBridge {
     const info = await this.info();
     if (!info.ready) throw new Error(info.message);
     const images = [];
-    if (job.referenceId && ['first-frame', 'reference-image'].includes(job.referenceMode || 'first-frame')) {
+    const referenceIds=[...new Set([...(Array.isArray(job.referenceImageIds)?job.referenceImageIds:[]),...(job.referenceId?[job.referenceId]:[])])];
+    if(referenceIds.length>9)throw new Error('豆包图生视频最多支持 9 张参考图');
+    if (referenceIds.length && ['first-frame', 'reference-image'].includes(job.referenceMode || 'first-frame')) {
       if (!this.references) throw new Error('参考图资源库未连接');
-      const { item, filename } = this.references.fileFor(job.referenceId);
+      for(const referenceId of referenceIds){
+      const { item, filename } = this.references.fileFor(referenceId);
       const bytes = fs.readFileSync(filename);
       if (bytes.length > 15 * 1024 * 1024) throw new Error('豆包图生视频参考图不能超过 15MB');
       images.push({ name: item.name, data_base64: bytes.toString('base64') });
+      }
     }
     const duration = Number(job.duration) || Number(process.env.DOUBAO_DURATION) || 5;
-    if (![5, 10].includes(duration)) throw new Error('豆包 Seedance 仅支持 5 秒或 10 秒');
+    if (![5, 10, 15].includes(duration)) throw new Error('豆包 Seedance 仅支持 5 秒、10 秒或 15 秒');
     const prompt = `视频总时长明确为 ${duration} 秒。${String(job.prompt || '')}`.slice(0, 2000);
     const task = await this.request('/api/video-tasks', { method: 'POST', body: JSON.stringify({
       prompt, model: job.videoModel || this.model,
@@ -111,8 +115,8 @@ export class DoubaoBridge {
     const tasks = await this.taskSnapshot.pending;
     const task = tasks.find(item => item.id === id);
     if (!task) throw new Error('豆包任务不存在');
-    const status = task.status === 'succeeded' ? 'complete' : task.status === 'failed' ? 'error' : task.status === 'queued' ? 'waiting' : 'running';
+    const status = task.status === 'succeeded' ? 'complete' : ['failed', 'cancelled'].includes(task.status) ? 'error' : task.status === 'queued' ? 'waiting' : 'running';
     const url = task.result_url || task.backup_result_url || task.fallback_result_url;
-    return { status, outputs: url ? [{ url }] : [], error: status === 'error' ? (task.error || '') : '' };
+    return { status, outputs: url ? [{ url }] : [], error: status === 'error' ? (task.error || task.error_message || '豆包任务已停止') : '', progress: { accountId: task.account_id || '', accountName: task.account_name || '', conversationId: task.conversation_id || '', stage: task.status, message: task.error || task.error_message || '' } };
   }
 }

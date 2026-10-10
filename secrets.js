@@ -1,5 +1,8 @@
 import fs from 'node:fs';
+import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+
+const windowsPowerShell = path.join(process.env.SystemRoot || process.env.WINDIR || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
 
 export function readSecret(prefix) {
   const direct = process.env[`${prefix}_API_KEY`] || '';
@@ -9,8 +12,11 @@ export function readSecret(prefix) {
   const dpapi = process.env[`${prefix}_API_KEY_DPAPI_FILE`] || '';
   if (dpapi && fs.existsSync(dpapi) && process.platform === 'win32') {
     const script = '$s=(Get-Content -LiteralPath $env:CODEX_SECRET_FILE -Raw).Trim() | ConvertTo-SecureString; $p=[Runtime.InteropServices.Marshal]::SecureStringToBSTR($s); try { [Console]::Out.Write([Runtime.InteropServices.Marshal]::PtrToStringBSTR($p)) } finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($p) }';
-    const result = spawnSync('pwsh.exe', ['-NoProfile', '-NonInteractive', '-Command', script], { encoding: 'utf8', env: { ...process.env, CODEX_SECRET_FILE: dpapi } });
-    if (result.status !== 0) throw new Error(`无法读取 ${prefix} 的 Windows 加密密钥`);
+    const result = spawnSync(windowsPowerShell, ['-NoProfile', '-NonInteractive', '-Command', script], { encoding: 'utf8', env: { ...process.env, PSModulePath: path.join(path.dirname(windowsPowerShell), 'Modules'), CODEX_SECRET_FILE: path.resolve(dpapi) } });
+    if (result.status !== 0) {
+      const detail = result.error?.message || result.stderr?.trim() || `退出码 ${result.status}`;
+      throw new Error(`无法读取 ${prefix} 的 Windows 加密密钥：${detail}`);
+    }
     return result.stdout.trim();
   }
   const service = process.env[`${prefix}_API_KEY_KEYCHAIN_SERVICE`] || '';

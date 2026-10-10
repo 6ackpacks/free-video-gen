@@ -1,3 +1,4 @@
+import { FEMALE_CLOTHES, FEMALE_WARDROBE_RULES } from './wardrobe-rules.js';
 import { randomUUID } from 'node:crypto';
 import { compatibility } from './action-templates.js';
 
@@ -7,7 +8,7 @@ export const KTV_QUALITY_TEXT = '严格保持底图空间与固定机位，呈�
 export const KTV_AUDIO_TEXT = '配上热闹但不过分嘈杂的 KTV 纯音乐伴奏和轻微现场氛围声；不使用受版权保护的可辨识歌词，不出现清晰对白、辱骂或醉酒喧闹。';
 
 const femaleLooks = ['22岁年轻成年亚洲女性，鹅蛋脸，黑色低盘发，身材匀称', '25岁年轻成年亚洲女性，精致圆脸，黑色披肩直发，曲线自然', '27岁年轻成年亚洲女性，清秀瓜子脸，黑色高马尾，身材匀称', '30岁年轻成年亚洲女性，柔和鹅蛋脸，黑色微卷长发，曲线自然'];
-const femaleClothes = ['酒红色常规圆领修身短袖上衣配黑色及膝裙和低跟鞋，胸线完整遮挡', '墨绿色常规领修身中长裙配细腰带和低跟鞋，剪裁得体', '米白色高圆领短袖上衣配深棕色及膝裙和低跟鞋，面料不透明', '宝蓝色常规圆领亮面中长裙配简洁耳饰和低跟鞋，鲜艳得体', '黑色高圆领修身 T 恤配酒红色及膝裙和低跟鞋，衣料不透明', '暗紫色常规领光泽中长裙配低跟鞋，胸口完整覆盖', '象牙白常规圆领短袖上衣配深棕色及膝裙和低跟鞋，整体合身得体'];
+const femaleClothes = FEMALE_CLOTHES;
 const maleLooks = ['成年亚洲男性，普通成熟面容，体型微胖，短发', '成年亚洲男性，普通自然面容，身材壮实，短发', '成年亚洲男性，面容朴素，体型偏胖，发际线略后移', '成年亚洲男性，普通成熟面容，身材瘦小，短发'];
 const maleClothes = ['深色短袖 T 恤配普通牛仔裤和休闲鞋', '灰色 Polo 衫配卡其休闲长裤和运动鞋', '藏蓝色短袖配深色休闲短裤和便鞋', '素色 T 恤配普通直筒长裤和休闲鞋'];
 

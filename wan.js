@@ -25,7 +25,8 @@ export function createWanProvider({ id, name, keyPrefix, submitUrl, tasksBaseUrl
       if (!key) throw new Error(`${name} 尚未配置 API Key`);
       const input = { prompt: String(job.prompt || '').slice(0, 20000) };
       const imageMode = job.referenceMode === 'reference-image' ? 'reference-image' : 'first-frame';
-      if (job.referenceImageUrl) input.media = [{ type: imageMode === 'reference-image' ? 'reference_image' : 'first_frame', url: job.referenceImageUrl }];
+      const images = imageMode === 'reference-image' && job.referenceImageUrls?.length ? job.referenceImageUrls : (job.referenceImageUrl ? [job.referenceImageUrl] : []);
+      if (images.length) input.media = images.map(url => ({ type: imageMode === 'reference-image' ? 'reference_image' : 'first_frame', url }));
       const payload = { model: 'wan3.0-video', input, parameters: {
         resolution: normalizeResolution(job.resolution), ratio: imageMode === 'first-frame' && job.referenceImageUrl ? 'adaptive' : (job.ratio || '9:16'),
         duration: normalizeDuration(job.duration), audio: shouldGenerateAudio(job.prompt), watermark: false, prompt_extend: false, seed: normalizeSeed(job.seed)

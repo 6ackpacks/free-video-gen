@@ -35,7 +35,7 @@ export class KeyframeBatchManager {
       progress: {
         total: items.length,
         complete: items.filter(x => x.status === 'complete').length,
-        active: items.filter(x => ['queued', 'submitting', 'waiting', 'running'].includes(x.status)).length,
+        active: items.filter(x => ['queued', 'submitting', 'waiting', 'running', 'complete_pending_download'].includes(x.status)).length,
         errors: items.filter(x => x.status === 'error').length
       }
     };

@@ -37,6 +37,31 @@ test('compatibility excludes templates requiring missing real space', () => {
   assert.equal(templates.find(x => x.id === 'action-12').compatibility.compatible, false);
 });
 
+test('房门记录与标签不一致时，普通房门动作仍可选择，刷卡和近门条件不放宽', () => {
+  const scene = { sceneTags: ['corridor', 'clear_walkway'], maxPeople: 3, doors: [{ position: '两侧墙面', cardAccess: false, nearby: false }] };
+  const templates = templatesWithCompatibility(scene);
+  for (const id of ['action-01', 'action-03', 'action-06', 'action-08', 'action-14']) {
+    const template = templates.find(x => x.id === id);
+    assert.equal(template.compatibility.compatible, true, id);
+    assert.doesNotThrow(() => compilePrompt({ referenceId: 'base', sceneProfile: scene, template, characters: makeCharacters(template, 1) }));
+  }
+  for (const id of ['action-07', 'action-09', 'action-10', 'action-12']) assert.equal(templates.find(x => x.id === id).compatibility.compatible, false, id);
+});
+
+test('没有房门、疑似房门及明确不可见的房门不能解锁动作', () => {
+  for (const doors of [[], [{}], [{ position: '疑似包厢入口' }], [{ position: '左侧', visible: false }], [{ position: '右侧', confirmed: false }]]) {
+    const template = templatesWithCompatibility({ sceneTags: ['corridor', 'clear_walkway'], maxPeople: 3, doors }).find(x => x.id === 'action-01');
+    assert.equal(template.compatibility.compatible, false);
+  }
+});
+
+test('明确刷卡房门可解锁刷卡动作，近处房门仍需连续路线，人数限制保持有效', () => {
+  const scene = { sceneTags: ['corridor', 'clear_walkway'], maxPeople: 2, doors: [{ position: '右侧近处', cardAccess: true, nearby: true }] };
+  assert.equal(templatesWithCompatibility(scene).find(x => x.id === 'action-10').compatibility.compatible, true);
+  assert.equal(templatesWithCompatibility({ ...scene, sceneTags: ['corridor'] }).find(x => x.id === 'action-09').compatibility.compatible, false);
+  assert.equal(templatesWithCompatibility({ ...scene, maxPeople: 1 }).find(x => x.id === 'action-08').compatibility.compatible, false);
+});
+
 test('compiler preserves locked action verbatim and fixed quality and audio', () => {
   for (const template of templatesWithCompatibility(fullScene)) {
     const characters = makeCharacters(template, 3);

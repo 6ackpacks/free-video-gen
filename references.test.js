@@ -5,6 +5,37 @@ import path from 'node:path';
 import test from 'node:test';
 import { ReferenceLibrary } from './references.js';
 
+test('旧场景档案读出和新档案保存时使用一致的房门证据', t => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'reference-evidence-'));
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const library = new ReferenceLibrary(directory, null);
+  const profile = { description: '真实走廊', sceneTags: ['corridor', 'clear_walkway'], maxPeople: 3, doors: [{ position: '两侧墙面', cardAccess: false, nearby: false }] };
+  assert.ok(library.public({ id: 'old', sceneProfile: profile }).sceneProfile.sceneTags.includes('visible_door'));
+  assert.equal(profile.sceneTags.includes('visible_door'), false);
+  assert.ok(library.normalizeProfile(profile).sceneTags.includes('visible_door'));
+  const hidden = library.normalizeProfile({ ...profile, doors: [{ position: '左侧', visible: false, cardAccess: true, nearby: true }] });
+  assert.equal(hidden.sceneTags.includes('visible_door'), false);
+  assert.equal(hidden.doors[0].visible, false);
+});
+
+test('底图分析重启恢复、超时退出且重复提交只调用一次模型', async t => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'reference-analysis-'));
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  let calls = 0;
+  const provider = { uploadImage: async () => 'https://example.com/image', analyzeScene: () => { calls++; return new Promise(() => {}); } };
+  const library = new ReferenceLibrary(directory, provider, { analysisTimeoutMs: 20 });
+  const ref = library.addBuffer({ name: 'store', mime: 'image/png', bytes: Buffer.from('image'), purpose: 'store-background' });
+  const first = library.analyze(ref.id), second = library.analyze(ref.id);
+  const results = await Promise.allSettled([first, second]);
+  assert.ok(results.every(r => r.status === 'rejected' && /超时/.test(r.reason.message)));
+  assert.equal(calls, 1);
+  assert.equal(library.get(ref.id).analysisStatus, 'error');
+  library.items[0].analysisStatus = 'analyzing'; library.save();
+  const restarted = new ReferenceLibrary(directory, provider);
+  assert.equal(restarted.get(ref.id).analysisStatus, 'error');
+  assert.match(restarted.get(ref.id).analysisError, /中断/);
+});
+
 test('足浴店底图库只列出用户上传和监控加工底图', t => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'reference-library-'));
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }));

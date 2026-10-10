@@ -1,18 +1,26 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { sceneEvidenceTags } from './action-templates.js';
 
 const formats = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp', 'image/gif': '.gif' };
-const purposes = new Set(['store-background', 'paired-keyframe']);
+const purposes = new Set(['store-background', 'paired-keyframe', 'story-product']);
 export class ReferenceLibrary {
-  constructor(directory, provider) {
+  constructor(directory, provider, options = {}) {
     this.directory = directory;
     this.provider = provider;
     this.file = path.join(directory, 'references.json');
     this.assets = path.join(directory, 'reference-images');
     this.inFlight = new Map();
+    this.analyses = new Map();
+    this.analysisTimeoutMs = options.analysisTimeoutMs || 150000;
     fs.mkdirSync(this.assets, { recursive: true });
     this.items = fs.existsSync(this.file) ? JSON.parse(fs.readFileSync(this.file, 'utf8')) : [];
+    for (const item of this.items) if (item.analysisStatus === 'analyzing') {
+      item.analysisStatus = 'error';
+      item.analysisError = '上次底图分析因工作台重启而中断，请重新分析或人工校正。';
+    }
+    this.save();
   }
   save() {
     fs.writeFileSync(this.file + '.tmp', JSON.stringify(this.items, null, 2));
@@ -25,7 +33,7 @@ export class ReferenceLibrary {
   }
   public(item) {
     const { id, name, mime, bytes, createdAt, sceneProfile = null, analysisStatus = 'pending', analysisError = '' } = item;
-    return { id, name, mime, bytes, createdAt, purpose: this.purposeOf(item), sceneProfile, analysisStatus, analysisError, previewUrl: `/api/references/${id}/image` };
+    return { id, name, mime, bytes, createdAt, purpose: this.purposeOf(item), sceneProfile: sceneProfile ? { ...sceneProfile, sceneTags: sceneEvidenceTags(sceneProfile) } : null, analysisStatus, analysisError, previewUrl: `/api/references/${id}/image` };
   }
   list(purpose = '') { return this.items.filter(item => !purpose || this.purposeOf(item) === purpose).map(item => this.public(item)); }
   get(id) { const item = this.items.find(x => x.id === id); if (!item) throw new Error('参考图不存在'); return this.public(item); }
@@ -53,7 +61,7 @@ export class ReferenceLibrary {
   remove(id) {
     const index = this.items.findIndex(item => item.id === id);
     if (index < 0) throw new Error('参考图不存在');
-    if (this.inFlight.has(id)) throw new Error('图片正在上传或分析，请稍后再删除');
+    if (this.inFlight.has(id) || this.analyses.has(id)) throw new Error('图片正在上传或分析，请稍后再删除');
     const [item] = this.items.splice(index, 1);
     fs.rmSync(path.join(this.assets, item.id + formats[item.mime]), { force: true });
     this.save();
@@ -85,20 +93,37 @@ export class ReferenceLibrary {
   async analyze(id, override = null) {
     const { item } = this.fileFor(id);
     if (override) {
+      this.analyses.delete(id);
       item.sceneProfile = this.normalizeProfile(override);
       item.analysisStatus = 'complete'; item.analysisError = ''; this.save();
       return this.public(item);
     }
+    if (this.analyses.has(id)) return this.analyses.get(id).promise;
     item.analysisStatus = 'analyzing'; item.analysisError = ''; this.save();
-    try {
-      const remoteUrl = await this.ensure(id);
-      item.sceneProfile = this.normalizeProfile(await this.provider.analyzeScene(remoteUrl));
-      item.analysisStatus = 'complete'; this.save();
-      return this.public(item);
-    } catch (error) {
-      item.analysisStatus = 'error'; item.analysisError = error.message || String(error); this.save();
-      throw error;
-    }
+    const entry = {};
+    this.analyses.set(id, entry);
+    let timer;
+    entry.promise = (async () => {
+      try {
+        const result = await Promise.race([
+          (async () => this.provider.analyzeScene(await this.ensure(id)))(),
+          new Promise((_, reject) => { timer = setTimeout(() => reject(Error('底图分析超时，请重新分析或人工校正。')), this.analysisTimeoutMs); })
+        ]);
+        if (this.analyses.get(id) !== entry) return this.public(item);
+        item.sceneProfile = this.normalizeProfile(result);
+        item.analysisStatus = 'complete'; this.save();
+        return this.public(item);
+      } catch (error) {
+        if (this.analyses.get(id) === entry) {
+          item.analysisStatus = 'error'; item.analysisError = error.message || String(error); this.save();
+        }
+        throw error;
+      } finally {
+        clearTimeout(timer);
+        if (this.analyses.get(id) === entry) this.analyses.delete(id);
+      }
+    })();
+    return entry.promise;
   }
   normalizeProfile(value) {
     const allowed = new Set(['corridor', 'visible_door', 'visible_card_door', 'nearby_visible_door', 'clear_walkway', 'side_area', 'ktv_private_room', 'karaoke_screen', 'microphone', 'sofa_area', 'low_table', 'song_selector', 'clear_floor', 'ktv_lobby', 'reception_desk']);
@@ -107,13 +132,14 @@ export class ReferenceLibrary {
       description: String(value?.description || '').trim().slice(0, 1200),
       fixedView: String(value?.fixedView || '').slice(0, 300),
       walkableAreas: Array.isArray(value?.walkableAreas) ? value.walkableAreas.map(x => String(x).slice(0, 200)).slice(0, 8) : [],
-      doors: Array.isArray(value?.doors) ? value.doors.map(x => ({ position: String(x?.position || '').slice(0, 150), cardAccess: x?.cardAccess === true, nearby: x?.nearby === true })).slice(0, 12) : [],
+      doors: Array.isArray(value?.doors) ? value.doors.map(x => ({ position: String(x?.position || '').slice(0, 150), visible: x?.visible !== false && x?.confirmed !== false, cardAccess: x?.cardAccess === true, nearby: x?.nearby === true })).slice(0, 12) : [],
       entrancesExits: Array.isArray(value?.entrancesExits) ? value.entrancesExits.map(x => String(x).slice(0, 200)).slice(0, 8) : [],
       perspective: String(value?.perspective || '').slice(0, 300),
       maxPeople: Math.max(1, Math.min(5, Number(value?.maxPeople) || 1)),
       sceneTags: Array.isArray(value?.sceneTags) ? [...new Set(value.sceneTags.filter(x => allowed.has(x)))] : []
     };
     if (!profile.description) throw new Error('场景档案缺少底图描述');
+    profile.sceneTags = sceneEvidenceTags(profile);
     return profile;
   }
 }

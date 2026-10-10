@@ -107,6 +107,7 @@ export class VideoQueue {
       Promise.resolve().then(() => this.provider.status(job.providerId, job))
         .then(result => {
           job.status = result.status;
+          if (result.progress) job.providerProgress = result.progress;
           job.outputs = result.outputs || job.outputs;
           job.error = result.error || '';
           job.nextAt = now() + 5000;

@@ -8,7 +8,7 @@
     "start": "node --env-file=project.env server.js",
     "start:proxy": "node --use-env-proxy --env-file=project.env server.js",
     "desktop": "electron .",
-    "test": "node --test",
+    "test": "node --test \"./*.test.js\"",
     "batch": "node run-batch.mjs"
   },
   "devDependencies": {

@@ -1,5 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { DoubaoBridge } from './doubao.js';
 
 test('Doubao submission writes selected duration into prompt and payload', async () => {
@@ -22,7 +25,7 @@ test('Doubao submission writes selected duration into prompt and payload', async
 test('Doubao submission rejects durations unsupported by DoubaoManager', async () => {
   const bridge = new DoubaoBridge();
   bridge.info = async () => ({ ready: true });
-  await assert.rejects(() => bridge.submit({ prompt: '测试', duration: 7 }), /仅支持 5 秒或 10 秒/);
+  await assert.rejects(() => bridge.submit({ prompt: '测试', duration: 7 }), /仅支持 5 秒、10 秒或 15 秒/);
 });
 
 test('Doubao account and scheduler methods use the manager API', async () => {
@@ -68,4 +71,30 @@ test('concurrent status checks share one manager task snapshot', async () => {
   assert.equal(requests, 1);
   assert.equal(one.status, 'complete');
   assert.equal(two.status, 'running');
+});
+
+test('豆包任务回传执行账号、进度和取消原因', async () => {
+  const bridge = new DoubaoBridge();
+  bridge.request = async () => [{ id: 'one', status: 'starting', account_id: 'account-1', account_name: '账号一', error: '正在上传图片' }, { id: 'two', status: 'cancelled', error: '任务中断' }];
+  const one = await bridge.status('one');
+  assert.equal(one.progress.accountName, '账号一');
+  assert.equal(one.progress.message, '正在上传图片');
+  const two = await bridge.status('two');
+  assert.equal(two.status, 'error');
+  assert.equal(two.error, '任务中断');
+});
+
+
+test('豆包短剧把多张选中的参考图作为真实图片附件提交并去重',async()=>{
+ const dir=fs.mkdtempSync(path.join(os.tmpdir(),'doubao-images-'));
+ try{
+  const files=['first.jpg','second.png'];files.forEach((file,index)=>fs.writeFileSync(path.join(dir,file),Buffer.from([index+1,2,3])));
+  const bridge=new DoubaoBridge();bridge.info=async()=>({ready:true});
+  bridge.setReferences({fileFor:id=>({item:{name:files[Number(id)]},filename:path.join(dir,files[Number(id)])})});
+  let payload;bridge.request=async(route,options)=>{payload=JSON.parse(options.body);return{id:'test-task'}};
+  await bridge.submit({duration:15,prompt:'商品演示',referenceMode:'reference-image',referenceImageIds:['0','1'],referenceId:'0'});
+  assert.equal(payload.duration,15);assert.equal(payload.mode,'i2v');assert.equal(payload.images.length,2);
+  assert.equal(payload.images[0].data_base64,Buffer.from([1,2,3]).toString('base64'));
+  assert.equal(payload.images[1].name,'second.png');
+ }finally{fs.rmSync(dir,{recursive:true,force:true})}
 });
