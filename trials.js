@@ -61,7 +61,7 @@ export class TrialManager {
     return this.items.map(item => {
       if (!summary) return this.view(item);
       const jobs = this.queue.state.jobs.filter(job => job.batchId === item.trialBatchId || job.batchId === item.bulkBatchId);
-      return { id: item.id, createdAt: item.createdAt, packId: item.packId || 'foot-spa-store', actionName: item.actionName, skillName: item.skillName, actionId: item.actionId, actionMode: item.actionMode, count: item.count, bulkBatchId: item.bulkBatchId, complete: jobs.filter(j => j.status === 'complete').length, errors: jobs.filter(j => ['error','needs_review'].includes(j.status)).length, generated: jobs.length };
+      return { id: item.id, createdAt: item.createdAt, packId: item.packId || 'foot-spa-store', actionName: item.actionName, skillName: item.skillName, actionId: item.actionId, actionMode: item.actionMode, count: item.count, bulkBatchId: item.bulkBatchId, complete: jobs.filter(j => j.status === 'complete').length, errors: jobs.filter(j => ['error','needs_review'].includes(j.status)).length, generated: jobs.length, previewJobs:jobs.filter(j=>j.status==='complete'&&j.outputs?.length).slice(0,3).map(j=>({id:j.id,duration:j.duration,actionName:j.actionName,index:j.index})),latestStatus:jobs.find(j=>['draft_pending','drafting','queued','submitting','waiting','running'].includes(j.status))?.status||jobs[0]?.status||'queued' };
     });
   }
   get(id) {

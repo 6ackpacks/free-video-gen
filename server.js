@@ -9,6 +9,8 @@ import { VideoQueue } from './queue.js';
 import { ReferenceLibrary } from './references.js';
 import { TrialManager, buildFixedMassagePrompt } from './trials.js';
 import { MediaStore } from './media.js';
+import { VideoPresentation } from './video-presentation.js';
+import { analyzeReplicaTemplate } from './replica-analysis.js';
 import { loadActionTemplates, templatesWithCompatibility } from './action-templates.js';
 import { selectTemplate } from './prompt-compiler.js';
 import { ImageTransformManager } from './image-transforms.js';
@@ -58,11 +60,12 @@ const storyTasks = new DraftTasks(path.join(root, 'data', 'story-draft-tasks.jso
 const references = new ReferenceLibrary(path.join(root, 'data'), provider);
 provider?.setReferences?.(references);
 const replicaSources=new ReplicaSources(path.join(root,'data','replica-sources'));
-const replicaTasks=new DraftTasks(path.join(root,'data','replica-analysis-tasks.json'),async input=>normalizeReplica(await provider.analyzeReplica({...replicaSources.vision(input.sourceId),direction:input.direction,audioNotes:input.audioNotes})));
+const replicaTasks=new DraftTasks(path.join(root,'data','replica-analysis-tasks.json'),(input,report)=>analyzeReplicaTemplate({...replicaSources.vision(input.sourceId),direction:input.direction,audioNotes:input.audioNotes},provider,report));
 const replicaRequests=new Map();
 const trials = new TrialManager(path.join(root, 'data', 'trials.json'), queue, references);
 const actionPromptTasks = new DraftTasks(path.join(root, 'data', 'action-prompt-tasks.json'), (input, report) => draftActionPromptBatch(input, provider, references, report));
 const media = new MediaStore(path.join(root, 'data', 'videos'));
+const presentation = new VideoPresentation(path.join(root,'data','video-presentation'));
 const imageTransforms = new ImageTransformManager(path.join(root, 'data'), provider, references);
 const keyframeBatches = new KeyframeBatchManager(path.join(root, 'data', 'keyframe-batches.json'), provider, references, queue, {
   maxSubmits: process.env.IMAGE_MAX_SUBMITS,
@@ -94,6 +97,10 @@ const api = async (req, res, url) => {
   const replicaFrame=/^\/api\/replica-sources\/([a-f0-9-]{36})\/frames\/(\d+)$/.exec(route);
   if(replicaFrame&&req.method==='GET')return reply(res,200,replicaSources.frame(replicaFrame[1],Number(replicaFrame[2])),'image/jpeg');
   if(route==='/api/replica-analysis'&&req.method==='POST'){const input=await body(req);replicaSources.get(input.sourceId);input.direction=String(input.direction||'').slice(0,3000);input.audioNotes=String(input.audioNotes||'').slice(0,2000);const task=replicaTasks.create(input);task.sourceId=input.sourceId;replicaTasks.save();return reply(res,202,task)}
+  if(route==='/api/replica-analysis'&&req.method==='GET'){
+    const sourceId=url.searchParams.get('sourceId');replicaSources.get(sourceId);
+    return reply(res,200,{task:replicaTasks.tasks.find(t=>t.sourceId===sourceId&&t.status==='complete'&&t.result)||null});
+  }
   const replicaTask=/^\/api\/replica-analysis\/([a-f0-9-]{36})$/.exec(route);
   if(replicaTask&&req.method==='GET')return reply(res,200,replicaTasks.get(replicaTask[1]));
   if(route==='/api/replica-presets'&&req.method==='POST')return reply(res,201,workspaceState.saveReplica(await body(req)));
@@ -248,7 +255,28 @@ const api = async (req, res, url) => {
     const directory = contentPackActionDirectory(pack);
     const options = { expectedCount: pack.expectedActionCount };
     const sceneProfile = referenceId ? references.get(referenceId).sceneProfile : null;
-    return reply(res, 200, sceneProfile ? templatesWithCompatibility(sceneProfile, directory, options) : loadActionTemplates(directory, options).map(item => ({ ...item, compatibility: { compatible: false, reasons: ['请先固定并分析底图'] } })));
+    const actions=sceneProfile ? templatesWithCompatibility(sceneProfile, directory, options) : loadActionTemplates(directory, options).map(item => ({ ...item, compatibility: { compatible: false, reasons: ['请先固定并分析底图'] } }));
+    return reply(res,200,actions.map(item=>({...item,example:presentation.example(pack.id,item.id,queue.state.jobs)})));
+  }
+  const exampleMatch=/^\/api\/template-examples\/([^/]+)\/([^/]+)$/.exec(route);
+  if(exampleMatch&&req.method==='POST'){
+    const [,packId,actionId]=exampleMatch,pack=getContentPack(packId);
+    if(pack.engine!=='background-variants'||!loadActionTemplates(contentPackActionDirectory(pack),{expectedCount:pack.expectedActionCount}).some(t=>t.id===actionId))throw Error('动作模板不存在');
+    const input=await body(req,71_000_000);
+    return reply(res,200,input.jobId?presentation.assign(packId,actionId,input.jobId,queue.state.jobs):presentation.upload(packId,actionId,input));
+  }
+  const exampleMedia=/^\/api\/template-examples\/media\/([a-f0-9-]{36})$/i.exec(route);
+  if(exampleMedia&&req.method==='GET'){
+    const file=presentation.local(exampleMedia[1]);if(!file||!fs.existsSync(file))return reply(res,404,{error:'示例视频不存在'});
+    return media.serveLocal(file,{id:exampleMedia[1]},req,res);
+  }
+  const posterMatch=/^\/api\/video-posters\/([a-f0-9-]{36})$/i.exec(route);
+  if(posterMatch){
+    const id=posterMatch[1],job=queue.state.jobs.find(j=>j.id===id&&j.status==='complete'&&j.outputs?.length);
+    if(!job&&!presentation.local(id))return reply(res,404,{error:'视频不存在'});
+    const file=presentation.poster(id);
+    if(req.method==='POST'){presentation.savePoster(id,(await body(req,700000)).dataUrl);return reply(res,200,{url:`/api/video-posters/${id}`});}
+    if(req.method==='GET'){if(!fs.existsSync(file))return reply(res,404,{error:'尚未生成封面'});res.writeHead(200,{'Content-Type':'image/jpeg','Cache-Control':'private, max-age=86400'});return fs.createReadStream(file).pipe(res);}
   }
   if (route === '/api/references' && req.method === 'GET') return reply(res, 200, references.list(url.searchParams.get('scope') || ''));
   if (route === '/api/references' && req.method === 'POST') return reply(res, 201, references.add(await body(req, 29_000_000)));
@@ -374,7 +402,7 @@ http.createServer(async (req, res) => {
     if (!['GET', 'HEAD'].includes(req.method) && req.headers.origin && req.headers.origin !== `http://127.0.0.1:${port}`) return reply(res, 403, { error: '仅允许从本地工作台提交请求' });
     const url = new URL(req.url, `http://127.0.0.1:${port}`);
     if (url.pathname.startsWith('/api/')) return await api(req, res, url);
-    if (req.method === 'GET' && ['/workbench-ui.css', '/workbench-ui.js', '/replica-ui.css', '/replica-ui.js', '/subtitle-ui.js', '/video-preview.js', '/image-warehouse.js', '/prompt-inputs.js', '/action-prompts-ui.js'].includes(url.pathname)) return reply(res, 200, fs.readFileSync(path.join(root, url.pathname.slice(1))), url.pathname.endsWith('.css') ? 'text/css; charset=utf-8' : 'text/javascript; charset=utf-8');
+    if (req.method === 'GET' && ['/workbench-ui.css', '/workbench-ui.js', '/replica-ui.css', '/replica-ui.js', '/subtitle-ui.js', '/video-preview.js', '/image-warehouse.js', '/prompt-inputs.js', '/action-prompts-ui.js', '/video-cards.js', '/template-examples.js', '/generation-history.js'].includes(url.pathname)) return reply(res, 200, fs.readFileSync(path.join(root, url.pathname.slice(1))), url.pathname.endsWith('.css') ? 'text/css; charset=utf-8' : 'text/javascript; charset=utf-8');
     if (req.method === 'GET' && url.pathname === '/legacy' && url.searchParams.get('tab') === 'accounts') return reply(res, 200, fs.readFileSync(path.join(root, 'index.html')), 'text/html; charset=utf-8');
     if (req.method === 'GET' && url.pathname === '/legacy') { res.writeHead(302, { Location: '/?mode=store', 'Cache-Control': 'no-store' }); return res.end(); }
     if(req.method==='GET'&&['/clone','/presets'].includes(url.pathname))return reply(res,200,fs.readFileSync(path.join(root,'replica-studio.html')),'text/html; charset=utf-8');
