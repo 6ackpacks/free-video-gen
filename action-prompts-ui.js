@@ -7,9 +7,12 @@
   function persistSettings() { localStorage.setItem(settingsKey, JSON.stringify(configs)); }
   function settings() {
     if (actionMode === 'random') return [{ actionMode:'random',duration:Number(byId('duration').value)||5,count:Number(byId('quantity').value)||1,creativeBrief:byId('creativeBrief')?.value||'' }];
-    return Object.entries(configs).filter(([id])=>templates.some(t=>t.id===id&&t.compatibility.compatible)).map(([actionId,c])=>({actionId,actionMode:'manual',...c}));
+    return templates.filter(t=>configs[t.id]&&t.compatibility.compatible).map(t=>({actionId:t.id,actionMode:'manual',...configs[t.id]}));
   }
   function sync() {
+    // The first ready event precedes the asynchronous template inventory.
+    // Preserve saved selections until compatibility can actually be checked.
+    if (!templates.length) return;
     for (const id of Object.keys(configs)) if(!templates.some(t=>t.id===id&&t.compatibility.compatible))delete configs[id];
     if (!Object.keys(configs).length && selectedAction) configs[selectedAction]={duration:5,count:1,creativeBrief:''};
     persistSettings(); renderSettings();
