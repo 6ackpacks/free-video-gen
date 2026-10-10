@@ -7,6 +7,16 @@ import { PassThrough } from 'node:stream';
 import { once } from 'node:events';
 import { test } from 'node:test';
 import { MediaStore } from './media.js';
+test('按需预览转发范围并在完整下载前送出首段，断开释放源连接',async t=>{
+  const directory=fs.mkdtempSync(path.join(os.tmpdir(),'progressive-preview-'));t.after(()=>fs.rmSync(directory,{recursive:true,force:true}));
+  const store=new MediaStore(directory),remote=new PassThrough();remote.statusCode=206;remote.headers={'content-range':'bytes 100-199/1000','content-length':'100','accept-ranges':'bytes'};
+  let requested;store.direct=async(url,headers)=>{requested=headers.Range;return remote;};
+  const res=new PassThrough();let bytes=0;res.on('data',chunk=>bytes+=chunk.length);let headers;res.writeHead=(status,value)=>{assert.equal(status,206);headers=value;};
+  const job={id:'progressive',outputs:['https://example.test/video.mp4']};
+  await store.serve(job,{headers:{range:'bytes=100-199'}},res,false,true);
+  remote.write(Buffer.alloc(10));assert.equal(bytes,10);assert.equal(requested,'bytes=100-199');assert.equal(headers['content-range'],'bytes 100-199/1000');assert.equal(fs.existsSync(store.filename(job)),false);assert.equal(store.saves.size,0);
+  res.destroy();await new Promise(resolve=>setImmediate(resolve));assert.equal(remote.destroyed,true);
+});
 
 test('异步试览准备显示状态、复用同一下载，失败可重试', async t => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'video-cache-status-'));

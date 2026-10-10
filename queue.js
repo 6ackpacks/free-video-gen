@@ -33,6 +33,11 @@ export class VideoQueue {
   }
   enqueue(planned, { reviewFirst = false } = {}) {
     if (!this.provider) throw new Error('视频 API 尚未配置');
+    for (const job of planned) {
+      if (job.skillId !== 'story-ad' && job.duration != null && (!Number.isInteger(Number(job.duration)) || Number(job.duration) < 2 || Number(job.duration) > 15)) throw Error('非短剧视频时长须为 2–15 秒');
+      const route=this.provider.routes?.find(r=>r.id===job.videoRoute);
+      if(route && job.duration != null && (Number(job.duration)<route.duration?.min || Number(job.duration)>route.duration?.max || (route.duration?.values&&!route.duration.values.includes(Number(job.duration)))))throw Error('所选视频模型不支持此时长，请调整模板设置');
+    }
     const batch = { id: randomUUID(), createdAt: new Date().toISOString(), count: planned.length };
     const jobs = planned.map(job => ({ ...job, batchId: batch.id, status: job.lockedPrompt ? 'queued' : (this.provider.draft && this.provider.promptModel ? 'draft_pending' : 'queued'), providerId: null, outputs: [], attempts: 0, draftAttempts: 0, nextAt: 0, error: '', createdAt: batch.createdAt }));
     if (reviewFirst && jobs.length > 1) {

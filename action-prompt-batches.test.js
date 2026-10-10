@@ -10,6 +10,18 @@ import { TrialManager } from './trials.js';
 const scene = { description: '真实走廊，两侧房门可见，通道连续。', sceneTags: ['corridor','visible_door','clear_walkway'], maxPeople: 3 };
 const references = { get: () => ({id:'base',analysisStatus:'complete',sceneProfile:scene}), ensure: async () => { await new Promise(resolve=>setImmediate(resolve));return 'https://example.invalid/base.jpg'; } };
 const input = {referenceId:'base',packId:'foot-spa-store',actionId:'action-02',actionMode:'manual',duration:5,count:5};
+test('多选模板各自保留数量、时长和想法，混合提交正确，超过15秒拒绝',async t=>{
+  const selections=[{actionId:'action-02',actionMode:'manual',duration:5,count:2,creativeBrief:'走慢一点'},{actionId:'action-05',actionMode:'manual',duration:15,count:1,creativeBrief:'两人错身'}];
+  const payload={...input,selections};
+  const result=await draftActionPromptBatch(payload,{promptModel:'test',draft:async job=>output(job)},references);
+  assert.equal(result.count,3);assert.deepEqual(result.items.map(i=>[i.actionId,i.duration,i.creativeBrief]),[['action-02',5,'走慢一点'],['action-02',5,'走慢一点'],['action-05',15,'两人错身']]);
+  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'mixed-template-'));t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));
+  const queue={provider:{promptModel:'test'},state:{jobs:[]},enqueue(jobs){this.state.jobs=jobs.map(j=>({...j,batchId:'mixed'}));return{id:'mixed'};}};
+  const manager=new TrialManager(path.join(dir,'trials.json'),queue,references);
+  const batch=await manager.create({...payload,count:3,preparedPrompts:result.items});
+  assert.deepEqual(batch.jobs.map(j=>j.duration),[5,5,15]);assert.deepEqual(queue.state.jobs.map(j=>j.creativeBrief),['走慢一点','走慢一点','两人错身']);
+  await assert.rejects(()=>draftActionPromptBatch({...payload,selections:[{...selections[0],duration:16}]},{promptModel:'test'},references),/2–15/);
+});
 function output(job) { return parseActionDraft(JSON.stringify({prompt:`第 ${job.index} 条：固定高位视角的真实走廊，成年女技师走在成年男客人前半步，两人沿真实通道自然远离镜头。技师轻轻回头点头，然后继续向走廊深处行走，末尾两人仍在走动。画面低对比、雾感、轻微模糊，带噪点与压缩痕迹。配舒缓无歌词纯音乐，没有可听见的人声。`,characters:actionPromptRules(job).relationships.map(role=>({role,appearance:'成年亚洲人物',clothing:'普通休闲服'}))}),job); }
 test('选 5 条得到 5 条完整提示词，想法可留空，进度可恢复，失败只影响该条',async()=>{
   let active=0,peak=0;const progress=[];

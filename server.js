@@ -273,7 +273,7 @@ const api = async (req, res, url) => {
     if(!reference.sceneProfile)throw Error('请先完成底图场景分析');
     const templates=templatesWithCompatibility(reference.sceneProfile,contentPackActionDirectory(pack),{expectedCount:pack.expectedActionCount});
     const template=selectTemplate({templates,actionId:input.actionId,mode:input.actionMode});
-    const job={referenceId:reference.id,sceneProfile:reference.sceneProfile,actionTemplate:template,duration:Math.max(2,Math.min(30,Number(input.duration)||5)),ratio:'9:16',outfitPreferences:input.outfitPreferences||{},userPrompt:String(input.userPrompt||'').slice(0,3000),draftAnchor:String(input.originalText||'').slice(0,14000),...promptInputs(input)};
+    const job={referenceId:reference.id,sceneProfile:reference.sceneProfile,actionTemplate:template,duration:Math.max(2,Math.min(15,Number(input.duration)||5)),ratio:'9:16',outfitPreferences:input.outfitPreferences||{},userPrompt:String(input.userPrompt||'').slice(0,3000),draftAnchor:String(input.originalText||'').slice(0,14000),...promptInputs(input)};
     if(previewMatch[2]==='prompt-preview')return reply(res,200,{sections:actionPromptRules(job),source:'template-rules'});
     return reply(res,200,await provider.draft(job));
   }
@@ -364,7 +364,7 @@ const api = async (req, res, url) => {
   if (videoMatch && req.method === 'GET') {
     const job = queue.state.jobs.find(item => item.id === videoMatch[1]);
     if (!job) return reply(res, 404, { error: '视频任务不存在' });
-    return await media.serve(job, req, res, url.searchParams.has('download'));
+    return await media.serve(job, req, res, url.searchParams.has('download'), url.searchParams.has('preview'));
   }
   return reply(res, 404, { error: '未找到接口' });
 };

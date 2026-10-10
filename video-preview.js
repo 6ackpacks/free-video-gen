@@ -14,7 +14,7 @@
     currentDialog = dialog;
     const body = dialog.querySelector('.wb-dialog-body');
     body.classList.add('wb-video-preview');
-    body.innerHTML = '<div class="wb-preview-title"></div><video controls playsinline preload="auto" hidden></video><div class="wb-preview-status" role="status"></div><progress hidden></progress><div class="wb-toolbar"><button data-prev>上一条</button><span data-position></span><button data-next>下一条</button><button data-retry hidden>重新准备</button><a class="btn alt" download>下载此条</a></div>';
+    body.innerHTML = '<div class="wb-preview-title"></div><video controls playsinline preload="metadata" hidden></video><div class="wb-preview-status" role="status"></div><progress hidden></progress><div class="wb-toolbar"><button data-prev>上一条</button><span data-position></span><button data-next>下一条</button><button data-retry hidden>重新加载</button><button data-cache>保存到本机</button><a class="btn alt" download>下载此条</a></div>';
     const video = body.querySelector('video'), status = body.querySelector('[role=status]'), progress = body.querySelector('progress');
     const previous = body.querySelector('[data-prev]'), next = body.querySelector('[data-next]'), retry = body.querySelector('[data-retry]');
     let jobs = [], index = 0, timer, revision = 0;
@@ -22,7 +22,7 @@
     dialog.addEventListener('close', () => { revision++; stop(); if (currentDialog === dialog) currentDialog = null; });
     video.addEventListener('waiting', () => status.textContent = '正在缓冲…');
     video.addEventListener('playing', () => {
-      status.textContent = '从本机缓存播放';
+      status.textContent = video.src.includes('preview=1') ? '正在按需播放；网络不稳定时可保存到本机后查看。' : '从本机缓存播放';
       try { localStorage.setItem('video-preview:seen:' + jobs[index].id, '1'); } catch {}
       document.dispatchEvent(new CustomEvent('workbench:video-previewed', { detail: { id: jobs[index].id } }));
       for(const area of document.querySelectorAll('.wb-review-first')){const data=JSON.parse(area.dataset.signature||'[]');if(data[0])reviewBatch(data[0],area.nextElementSibling);}
@@ -36,15 +36,18 @@
       body.querySelector('[data-position]').textContent = `${index + 1} / ${jobs.length}`;
       previous.disabled = index === 0; next.disabled = index >= jobs.length - 1;
       body.querySelector('a').href = `/api/video/${job.id}?download=1`;
-      status.textContent = '正在准备本机预览…'; progress.hidden = false; progress.removeAttribute('value');
+      status.textContent = '正在读取视频…'; progress.hidden = true;
+      const cacheButton=body.querySelector('[data-cache]');cacheButton.disabled=false;
+      cacheButton.onclick=()=>{cacheButton.disabled=true;progress.hidden=false;poll(true);};
       async function poll(first = false) {
         try {
           const state = await api(`/video/${job.id}/cache`, first ? { method: 'POST', body: '{}' } : {});
           if (!dialog.open || token !== revision) return;
           if (state.ready) {
             progress.hidden = true; video.hidden = false;
-            video.src = `/api/video/${job.id}`;
-            status.textContent = '已保存到本机，点击播放；可拖动进度查看。';
+            if(!video.getAttribute('src'))video.src = `/api/video/${job.id}`;
+            cacheButton.textContent='已保存到本机';cacheButton.disabled=true;
+            if(video.paused)status.textContent = '已保存到本机，点击播放；可拖动进度查看。';
             return;
           }
           if (state.error) throw Error(state.error);
@@ -58,7 +61,14 @@
           progress.hidden = true; status.textContent = '预览准备失败：' + error.message; retry.hidden = false;
         }
       }
-      poll(true);
+      try {
+        const state=await api(`/video/${job.id}/cache`);
+        if(!dialog.open||token!==revision)return;
+        video.hidden=false;video.src=`/api/video/${job.id}${state.ready?'':'?preview=1'}`;
+        cacheButton.textContent=state.ready?'已保存到本机':'保存到本机';cacheButton.disabled=state.ready;
+        status.textContent=state.ready?'本机视频已就绪，点击播放。':'点击播放即可按需加载，无需等整条下载。';
+        if(state.running){cacheButton.disabled=true;progress.hidden=false;poll();}
+      }catch(error){status.textContent=error.message;retry.hidden=false;}
     }
     previous.onclick = () => { index--; select(); };
     next.onclick = () => { index++; select(); };

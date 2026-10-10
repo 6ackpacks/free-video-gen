@@ -44,7 +44,7 @@ export class TrialManager {
     const bulk = item.bulkBatchId ? this.queue.state.jobs.filter(job => job.batchId === item.bulkBatchId) : [];
     const jobs = [...initialJobs, ...bulk].filter(Boolean).sort((a, b) => a.index - b.index).map(job => ({
       id: job.id, index: job.index, status: job.status, outputs: job.outputs, error: job.error || '',
-      actionId: job.actionId, actionName: job.actionName, endState: job.endState,
+      actionId: job.actionId, actionName: job.actionName, duration: job.duration, endState: job.endState,
       prompt: job.prompt, promptSections: job.promptSections, characters: job.characters
     }));
     return {
@@ -92,7 +92,8 @@ export class TrialManager {
     const videoRoute = ['apimart', 'wan-tokendance', 'wan-aliyun', 'doubao'].includes(input.videoRoute) ? input.videoRoute : (input.generationMethod === 'doubao' ? 'doubao' : 'apimart');
     const generationMethod = videoRoute === 'doubao' ? 'doubao' : 'apimart';
     const videoModel = videoRoute.startsWith('wan-') ? 'wan3.0-video' : videoRoute === 'doubao' ? (process.env.DOUBAO_MODEL || 'seedance_v2.0_mini') : (process.env.VIDEO_MODEL || 'grok-imagine-1.5-video-ext');
-    const duration = Math.max(2, Math.min(30, Math.round(Number(input.duration) || (videoRoute.startsWith('wan-') ? 5 : 6))));
+    const duration = Number(input.duration ?? 5);
+    if (!Number.isInteger(duration) || duration < 2 || duration > 15) throw Error('非短剧视频时长须为 2–15 秒');
     const resolution = ['480P', '720P', '1080P'].includes(String(input.resolution || '').toUpperCase()) ? String(input.resolution).toUpperCase() : '480P';
     const ratio = '9:16';
     const actionMode = input.actionMode === 'random' ? 'random' : 'manual';
@@ -103,13 +104,15 @@ export class TrialManager {
     const planned = [];
     for (let i = 1; i <= count; i++) {
       const reviewed = direct ? input.preparedPrompts[i-1] : (i === 1 ? input.preparedPrompt : null);
+      const jobDuration = Number(Array.isArray(input.selections) ? reviewed?.duration ?? duration : duration);
+      if (!Number.isInteger(jobDuration) || jobDuration < 2 || jobDuration > 15) throw Error('非短剧视频时长须为 2–15 秒');
       const template = selectTemplate({ templates, actionId: reviewed ? reviewed.actionId : input.actionId, mode: reviewed ? 'manual' : actionMode, recentActionIds: [...recentActionIds, ...planned.map(x => x.actionId)] });
       planned.push({
         id: randomUUID(), index: i, packId: pack.id, skillId: `${pack.id}-locked-actions`, skillName: template.name,
-        prompt: '', promptSections: null, lockedPrompt: false, actionTemplate: template, promptMode: 'template-skill-v1', ...promptInputs(input),
+        prompt: '', promptSections: null, lockedPrompt: false, actionTemplate: template, promptMode: 'template-skill-v1', ...promptInputs(direct && Array.isArray(input.selections) ? reviewed : input),
         actionId: template.id, actionName: template.name, endState: template.endState,
         sceneProfile: reference.sceneProfile, characters: [], outfitPreferences: input.outfitPreferences || {}, description, userPrompt: description,
-        referenceId, generationMethod, videoRoute, videoModel, duration, resolution, ratio, seed: Math.floor(Math.random() * 2147483647)
+        referenceId, generationMethod, videoRoute, videoModel, duration: jobDuration, resolution, ratio, seed: Math.floor(Math.random() * 2147483647)
       });
     }
     if (direct) {
@@ -133,7 +136,7 @@ export class TrialManager {
     const item = {
       id: randomUUID(), createdAt: new Date().toISOString(), packId: pack.id, skillId: `${pack.id}-locked-actions`, skillName: planned[0].skillName,
       count, description, userPrompt: description, referenceId, generationMethod, videoRoute, videoModel, duration, resolution, ratio, actionMode, actionId: planned[0].actionId,
-      actionName: planned[0].actionName, sceneProfile: reference.sceneProfile,
+      actionName: [...new Set(planned.map(job=>job.actionName))].join(' / '), sceneProfile: reference.sceneProfile,
       ...promptInputs(input),
       submissionMode: direct ? 'selected-prompts' : 'trial-first', requestId: input.requestId || '',
       trialBatchId: batch.id, bulkBatchId: direct ? 'none' : '', remaining: direct ? [] : planned.slice(1)
@@ -151,7 +154,8 @@ export class TrialManager {
     const routeInfo = this.queue.provider?.routes?.find(item => item.id === videoRoute);
     const videoModel = routeInfo?.model || '';
     const generationMethod = videoRoute === 'doubao' ? 'doubao' : 'apimart';
-    const duration = Math.max(2, Math.min(30, Math.round(Number(input.duration) || (videoRoute === 'apimart' ? 6 : 5))));
+    const duration = Number(input.duration ?? 5);
+    if (!Number.isInteger(duration) || duration < 2 || duration > 15) throw Error('非短剧视频时长须为 2–15 秒');
     const resolution = ['480P', '720P', '1080P'].includes(String(input.resolution || '').toUpperCase()) ? String(input.resolution).toUpperCase() : '480P';
     const description = String(input.userPrompt || '').trim().slice(0, 3000);
     const referenceImageUrl = videoRoute.startsWith('wan-') || videoRoute === 'custom'

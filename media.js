@@ -61,8 +61,22 @@ export class MediaStore {
       req.on('error', reject);
     });
   }
-  async serve(job, req, res, download = false) {
+  async serve(job, req, res, download = false, preview = false) {
     const file = this.filename(job);
+    if (preview && !download && !fs.existsSync(file)) {
+      const range = req.headers.range;
+      if (range && !/^bytes=(?:\d+-\d*|-\d+)$/.test(range)) { res.writeHead(416); return res.end(); }
+      const remote = await this.direct(getUrl(job), range ? { Range: range } : {});
+      if (res.destroyed) { remote.destroy(); return; }
+      if (![200,206,416].includes(remote.statusCode)) { remote.destroy(); throw Error(`预览源返回 HTTP ${remote.statusCode}`); }
+      const headers = { 'Content-Type':'video/mp4', 'Cache-Control':'private, max-age=3600' };
+      for (const name of ['content-length','content-range','accept-ranges']) if(remote.headers[name])headers[name]=remote.headers[name];
+      res.writeHead(remote.statusCode, headers);
+      res.once('close',()=>remote.destroy());
+      remote.on('error',error=>res.destroy(error));
+      remote.pipe(res);
+      return;
+    }
     // A preview must use the same bounded download path as a ZIP download.
     // Streaming the origin directly to the browser bypasses the speed limit.
     if (!fs.existsSync(file)) await this.save(job);
@@ -71,16 +85,17 @@ export class MediaStore {
   }
   serveLocal(file, job, req, res, download = false) {
     const size = fs.statSync(file).size;
-    const match = /^bytes=(\d+)-(\d*)$/.exec(req.headers.range || '');
-    const start = match ? Number(match[1]) : 0;
-    const end = match && match[2] ? Math.min(Number(match[2]), size - 1) : size - 1;
+    const match = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range || '');
+    if(req.headers.range && (!match || (!match[1]&&!match[2]))) { res.writeHead(416,{'Content-Range':`bytes */${size}`});return res.end(); }
+    const start = match ? match[1] ? Number(match[1]) : Math.max(0,size-Number(match[2])) : 0;
+    const end = match && match[1] && match[2] ? Math.min(Number(match[2]), size - 1) : size - 1;
     if (start >= size || end < start) { res.writeHead(416, { 'Content-Range': `bytes */${size}` }); return res.end(); }
     res.writeHead(match ? 206 : 200, {
       'Content-Type': 'video/mp4', 'Accept-Ranges': 'bytes', 'Content-Length': end - start + 1,
       ...(match ? { 'Content-Range': `bytes ${start}-${end}/${size}` } : {}),
       'Content-Disposition': `${download ? 'attachment' : 'inline'}; filename="video-${job.id}.mp4"`
     });
-    fs.createReadStream(file, { start, end }).pipe(res);
+    const stream=fs.createReadStream(file, { start, end });res.once('close',()=>stream.destroy());stream.on('error',error=>res.destroy(error));stream.pipe(res);
   }
   async save(job) {
     if (fs.existsSync(this.filename(job))) return this.filename(job);

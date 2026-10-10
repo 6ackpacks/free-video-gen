@@ -10,7 +10,7 @@ export async function planPairedVideoJobs(input, references) {
   if (!items.length || items.length > 500) throw new Error('一图一视频批次须包含 1–500 张已确认首帧');
   const videoRoute = allowedRoutes.has(input.videoRoute) ? input.videoRoute : 'apimart';
   const videoModel = String(input.videoModel || '').trim();
-  const duration = Math.max(2, Math.min(30, Math.round(Number(input.duration) || 5)));
+  const duration = Math.max(2, Math.min(15, Math.round(Number(input.duration) || 5)));
   const resolution = ['480P', '720P', '1080P'].includes(String(input.resolution || '').toUpperCase()) ? String(input.resolution).toUpperCase() : '480P';
   const seen = new Set();
   const jobs = [];

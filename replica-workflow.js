@@ -17,7 +17,7 @@ export function replicaPrompts(input,route){
  const model=normalizeReplica(input.replica);const count=Number(input.count||1),duration=Number(input.duration);
  if(!Number.isInteger(count)||count<1||count>100)throw Error('生成条数应为1–100');
  if(!route?.configured)throw Error('请选择已配置的视频模型');
- if(!Number.isFinite(duration)||duration<(route.duration?.min||1)||duration>(route.duration?.max||30)||(route.duration?.values&&!route.duration.values.includes(duration)))throw Error('所选模型不支持此时长');
+ if(!Number.isFinite(duration)||duration<(route.duration?.min||1)||duration>Math.min(15,route.duration?.max||15)||(route.duration?.values&&!route.duration.values.includes(duration)))throw Error('所选模型不支持此时长');
  if(!['9:16','16:9','1:1'].includes(input.ratio))throw Error('画面比例无效');
  if(!route.resolutions?.includes(input.resolution))throw Error('所选分辨率不可用');
  const refs=[...new Set(input.referenceImageIds||[])];if(refs.length>3||refs.some(v=>!/^[-a-f0-9]{36}$/i.test(v)))throw Error('参考图片最多3张');
