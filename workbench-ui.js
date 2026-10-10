@@ -9,7 +9,7 @@
   function remember(extra) { try { localStorage.setItem(storageKey, JSON.stringify({ ...localRead(), ...extra })); } catch { toast('工作区布局未保存，请检查浏览器存储空间。'); } }
   function toast(message) { let el = byId('wbToast'); if (!el) { el = document.createElement('div'); el.id='wbToast'; el.className='wb-toast'; el.setAttribute('role','status'); document.body.append(el); } el.textContent=message; el.hidden=false; clearTimeout(toastTimer); toastTimer=setTimeout(()=>el.hidden=true,4000); }
   async function request(url, options={}) { const r=await fetch('/api'+url,{...options,headers:{'Content-Type':'application/json'}}); const data=await r.json(); if(!r.ok)throw Error(data.error||'请求失败'); return data; }
-  function show(view, persist=true) { if(!panes[view])return; activeView=view;if(frame)frame.dataset.view=view; for(const [id,pane] of Object.entries(panes))pane.hidden=id!==view; for(const button of tabs.querySelectorAll('[data-view]'))button.setAttribute('aria-selected',String(button.dataset.view===view)); if(persist)remember({view}); }
+  function show(view, persist=true) { if(!panes[view])return; activeView=view;if(frame)frame.dataset.view=view; for(const [id,pane] of Object.entries(panes))pane.hidden=id!==view; for(const button of tabs.querySelectorAll('[data-view]'))button.setAttribute('aria-selected',String(button.dataset.view===view)); if(persist)remember({view});document.dispatchEvent(new CustomEvent('workbench:view',{detail:{view}})); }
   function panel(title, className) { const el=document.createElement('section');el.className='wb-column '+className;el.setAttribute('aria-label',title);return el; }
   function empty(title, description) { const el=document.createElement('div');el.className='wb-empty';el.innerHTML=icon('film')+`<strong>${esc(title)}</strong><p>${esc(description)}</p>`;return el; }
   function pane(id, label, nodes, description) {
@@ -60,9 +60,9 @@
   }
   function setupStore() {
     const main=byId('studioPage'),workspace=main.querySelector('.workspace'),cards=[...workspace.children],trial=main.querySelector('.trial'),history=main.querySelector('.history');
-    const {context,center,compose}=createFrame(main);context.append(cards[0]);collapse(cards[0]);compose.append(cards[2]);
+    const {context,center,compose}=createFrame(main);context.append(cards[0]);collapse(cards[0]);compose.append(cards[2]);cards[2].querySelector('h2').textContent='03 · 生成设置';
     const promptField=byId('promptParts').closest('.field'),promptCard=document.createElement('section');promptCard.className='card';promptCard.innerHTML='<details><summary class="head">查看模板的核心约束</summary><div class="body"></div></details>';promptCard.querySelector('.body').append(promptField,byId('previewPrompt'));
-    dock(compose,['createTrial']);center.append(pane('templates','选择动作',[cards[1]],'固定底图后选择兼容动作，可多选或随机轮换。'),pane('prompts','提示词生成',[promptCard],'模板作为生成规则交给大模型，结果可编辑后用于试片。'),pane('videos','试片与成片',[trial],'先生成一条试片，满意后再生成剩余素材。'),pane('history','批次记录',[history],'历史批次会保留，可继续检查与下载。'));
+    dock(compose,['generateActionPrompts','createTrial']);center.append(pane('templates','选择动作',[cards[1]],'固定底图后选择兼容动作，可多选或随机轮换。'),pane('prompts','提示词生成',[promptCard],'模板作为生成规则交给大模型，结果可编辑后用于试片。'),pane('videos','成片与进度',[trial],'所选提示词已提交，生成完成后可试览与下载。'),pane('history','批次记录',[history],'历史批次会保留，可继续检查与下载。'));
     workspace.remove();return 'templates';
   }
   function dialog(title) { const d=document.createElement('dialog');d.className='wb-dialog';d.innerHTML=`<div class="wb-dialog-head"><h2>${esc(title)}</h2><button class="btn alt">关闭</button></div><div class="wb-dialog-body"></div>`;d.querySelector('button').onclick=()=>d.close();d.addEventListener('close',()=>{d.remove();document.dispatchEvent(new CustomEvent('workbench:dialog',{detail:{open:!!document.querySelector('.wb-dialog[open]')}}))});document.body.append(d);d.showModal();document.dispatchEvent(new CustomEvent('workbench:dialog',{detail:{open:true}}));return d; }
@@ -92,7 +92,7 @@
             case 'details':{const detail=dialog(r.title),box=detail.querySelector('.wb-dialog-body');box.innerHTML=`<p>${esc(r.model||'')} ${esc(r.duration?`${r.duration} 秒`:'')} ${esc(r.error||'')}</p><pre style="white-space:pre-wrap;font-size:12px">${esc(r.prompt||'没有提示词；此记录包含素材或已保存设置。')}</pre>${r.type==='video'&&r.status==='complete'?`<a class="btn" href="/api/video/${r.id}?download=1" download>下载成片</a>`:''}`;break}
             case 'favorite':case 'hidden':await mark(r.key,button.dataset.op);render();break;
             case 'use':{if(r.kind==='replica'){location.href='/clone?preset='+r.id;return}if(r.page!==location.pathname+location.search){sessionStorage.setItem('workbench:pending-preset',JSON.stringify(r));location.href=r.page;return}applyPreset(r);d.close();break}
-            case 'reuse':if((r.kind==='story'&&location.pathname!=='/story')||(r.kind==='paired'&&byId('pairPreview')===null)){sessionStorage.setItem('workbench:pending-record',JSON.stringify(r));location.href=r.kind==='story'?'/story':'/?mode=paired';return}document.dispatchEvent(new CustomEvent('workbench:reuse',{detail:r}));d.close();break;
+            case 'reuse':if(r.kind==='store'&&(!byId('studioPage')||(new URLSearchParams(location.search).get('pack')||'foot-spa-store')!==r.packId)){sessionStorage.setItem('workbench:pending-record',JSON.stringify(r));location.href='/?mode=store&pack='+r.packId;return}if((r.kind==='story'&&location.pathname!=='/story')||(r.kind==='paired'&&byId('pairPreview')===null)){sessionStorage.setItem('workbench:pending-record',JSON.stringify(r));location.href=r.kind==='story'?'/story':'/?mode=paired';return}document.dispatchEvent(new CustomEvent('workbench:reuse',{detail:r}));d.close();break;
             case 'delete-preset':if(confirm('删除这套预设？已经生成的素材不会删除。')){libraryState=await request('/workspace-presets/'+r.id,{method:'DELETE'});render()}break;
           }
         }catch(e){toast(e.message)}});
@@ -104,7 +104,7 @@
   async function hydrate(record) {
     if(record.loaded||!['prompt','video'].includes(record.type))return;
     if(record.type==='video'){const job=await request('/jobs/'+record.id);record.prompt=job.prompt||'';}
-    else{const task=await request((record.kind==='story'?'/story-tasks/':'/keyframe-prompt-tasks/')+record.id);record.result=task.result;record.prompt=(task.result?.items||[]).map((item,index)=>`${index+1}. ${item.prompt||item.imagePrompt||''}`).join('\n\n');}
+    else{const task=await request((record.kind==='store'?'/action-prompt-tasks/':record.kind==='story'?'/story-tasks/':'/keyframe-prompt-tasks/')+record.id);record.result=task.result;record.prompt=(task.result?.items||[]).map((item,index)=>`${index+1}. ${item.prompt||item.imagePrompt||''}`).join('\n\n');}
     record.loaded=true;
   }
   function applyPreset(preset) { for(const [id,value] of Object.entries(preset.fields||{})){const el=byId(id);if(!el||['password','file'].includes(el.type))continue;if(el.tagName==='SELECT'&&![...el.options].some(o=>o.value===String(value)))continue;if(el.type==='checkbox')el.checked=!!value;else el.value=value;el.dispatchEvent(new Event('change',{bubbles:true}))}document.dispatchEvent(new CustomEvent('workbench:preset',{detail:preset}));window.WorkbenchCache?.save();toast('预设已应用，尚未提交任何生成任务。') }

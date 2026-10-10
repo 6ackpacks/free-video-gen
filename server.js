@@ -16,6 +16,7 @@ import { planPromptPairs, YIQU_TEMPLATE } from './paired-prompts.js';
 import { KeyframeBatchManager } from './keyframe-batches.js';
 import { draftKeyframePromptBatch } from './prompt-batches.js';
 import { DraftTasks } from './draft-tasks.js';
+import { draftActionPromptBatch } from './action-prompt-batches.js';
 import { configureNetwork } from './network.js';
 import { ensureDoubaoManager } from './manager-runtime.js';
 import { contentPackActionDirectory, getContentPack, listContentPacks } from './content-packs.js';
@@ -60,6 +61,7 @@ const replicaSources=new ReplicaSources(path.join(root,'data','replica-sources')
 const replicaTasks=new DraftTasks(path.join(root,'data','replica-analysis-tasks.json'),async input=>normalizeReplica(await provider.analyzeReplica({...replicaSources.vision(input.sourceId),direction:input.direction,audioNotes:input.audioNotes})));
 const replicaRequests=new Map();
 const trials = new TrialManager(path.join(root, 'data', 'trials.json'), queue, references);
+const actionPromptTasks = new DraftTasks(path.join(root, 'data', 'action-prompt-tasks.json'), (input, report) => draftActionPromptBatch(input, provider, references, report));
 const media = new MediaStore(path.join(root, 'data', 'videos'));
 const imageTransforms = new ImageTransformManager(path.join(root, 'data'), provider, references);
 const keyframeBatches = new KeyframeBatchManager(path.join(root, 'data', 'keyframe-batches.json'), provider, references, queue, {
@@ -118,7 +120,7 @@ const api = async (req, res, url) => {
   if (route === '/api/workspace-records' && req.method === 'GET') {
     const images = references.list().map(r => ({ ...r, key: 'image:'+r.id, type: 'image', title: r.name, status: 'complete' }));
     const videos = queue.state.jobs.map(j => ({ id: j.id, key: 'video:'+j.id, type:'video', title: j.skillName || `视频 ${j.index}`, createdAt:j.createdAt, status:j.status, model:j.videoModel, duration:j.duration, error:j.error, prompt:(j.prompt||'').slice(0,512), batchId:j.batchId }));
-    const promptRecords = [...storyTasks.tasks.map(t => ({ id:t.id,key:'prompt:'+t.id,type:'prompt',kind:'story',title:t.result?.subjectSnapshot?.name ? t.result.subjectSnapshot.name+' · 剧情提示词' : '剧情提示词批次',createdAt:t.createdAt,status:t.status,error:t.error,prompt:(t.result?.items?.[0]?.prompt||'').slice(0,512) })), ...draftTasks.tasks.map(t => ({ id:t.id,key:'prompt:'+t.id,type:'prompt',kind:'paired',title:'家庭按摩 · 人物提示词批次',createdAt:t.createdAt,status:t.status,error:t.error,prompt:(t.result?.items?.[0]?.imagePrompt||'').slice(0,512) }))];
+    const promptRecords = [...actionPromptTasks.tasks.map(t => ({id:t.id,key:'prompt:'+t.id,type:'prompt',kind:'store',packId:t.result?.inputs?.packId||'foot-spa-store',title:'门店提示词 · '+(t.result?.count||t.total||0)+' 条',createdAt:t.createdAt,status:t.status,error:t.error,prompt:(t.result?.items?.[0]?.prompt||'').slice(0,512)})), ...storyTasks.tasks.map(t => ({ id:t.id,key:'prompt:'+t.id,type:'prompt',kind:'story',title:t.result?.subjectSnapshot?.name ? t.result.subjectSnapshot.name+' · 剧情提示词' : '剧情提示词批次',createdAt:t.createdAt,status:t.status,error:t.error,prompt:(t.result?.items?.[0]?.prompt||'').slice(0,512) })), ...draftTasks.tasks.map(t => ({ id:t.id,key:'prompt:'+t.id,type:'prompt',kind:'paired',title:'家庭按摩 · 人物提示词批次',createdAt:t.createdAt,status:t.status,error:t.error,prompt:(t.result?.items?.[0]?.imagePrompt||'').slice(0,512) }))];
     return reply(res, 200, [...images,...videos,...promptRecords].sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt))));
   }
   if (route === '/api/content-packs' && req.method === 'GET') return reply(res, 200, listContentPacks());
@@ -280,6 +282,9 @@ const api = async (req, res, url) => {
     const { item, filename } = references.fileFor(imageMatch[1]);
     return reply(res, 200, fs.readFileSync(filename), item.mime);
   }
+  if (route === '/api/action-prompt-tasks' && req.method === 'POST') return reply(res, 202, actionPromptTasks.create(await body(req)));
+  const actionTaskMatch = /^\/api\/action-prompt-tasks\/([a-f0-9-]{36})$/i.exec(route);
+  if (actionTaskMatch && req.method === 'GET') return reply(res, 200, actionPromptTasks.get(actionTaskMatch[1]));
   if (route === '/api/trials' && req.method === 'GET') return reply(res, 200, trials.list(url.searchParams.has('summary')));
   if (route === '/api/trials' && req.method === 'POST') {
     const input = await body(req);
@@ -369,7 +374,7 @@ http.createServer(async (req, res) => {
     if (!['GET', 'HEAD'].includes(req.method) && req.headers.origin && req.headers.origin !== `http://127.0.0.1:${port}`) return reply(res, 403, { error: '仅允许从本地工作台提交请求' });
     const url = new URL(req.url, `http://127.0.0.1:${port}`);
     if (url.pathname.startsWith('/api/')) return await api(req, res, url);
-    if (req.method === 'GET' && ['/workbench-ui.css', '/workbench-ui.js', '/replica-ui.css', '/replica-ui.js', '/subtitle-ui.js', '/video-preview.js', '/image-warehouse.js', '/prompt-inputs.js'].includes(url.pathname)) return reply(res, 200, fs.readFileSync(path.join(root, url.pathname.slice(1))), url.pathname.endsWith('.css') ? 'text/css; charset=utf-8' : 'text/javascript; charset=utf-8');
+    if (req.method === 'GET' && ['/workbench-ui.css', '/workbench-ui.js', '/replica-ui.css', '/replica-ui.js', '/subtitle-ui.js', '/video-preview.js', '/image-warehouse.js', '/prompt-inputs.js', '/action-prompts-ui.js'].includes(url.pathname)) return reply(res, 200, fs.readFileSync(path.join(root, url.pathname.slice(1))), url.pathname.endsWith('.css') ? 'text/css; charset=utf-8' : 'text/javascript; charset=utf-8');
     if (req.method === 'GET' && url.pathname === '/legacy' && url.searchParams.get('tab') === 'accounts') return reply(res, 200, fs.readFileSync(path.join(root, 'index.html')), 'text/html; charset=utf-8');
     if (req.method === 'GET' && url.pathname === '/legacy') { res.writeHead(302, { Location: '/?mode=store', 'Cache-Control': 'no-store' }); return res.end(); }
     if(req.method==='GET'&&['/clone','/presets'].includes(url.pathname))return reply(res,200,fs.readFileSync(path.join(root,'replica-studio.html')),'text/html; charset=utf-8');

@@ -2,7 +2,7 @@
   const $ = id => document.getElementById(id);
   const storageKey = 'prompt-inputs:v1:' + location.pathname + location.search;
   let mode, panel;
-  function read() { return { creativeBrief: $('creativeBrief')?.value || '', outputRequirements: $('outputRequirements')?.value || '', outputLanguage: $('outputLanguage')?.value || 'auto' }; }
+  function read() { return { creativeBrief: $('creativeBrief')?.value || '', outputRequirements: '', outputLanguage: 'auto' }; }
   function selected() {
     const detail = { items: [], context: {}, apply: null };
     document.dispatchEvent(new CustomEvent('workbench:collect-prompt-drafts', { detail }));
@@ -38,17 +38,18 @@
     mode = $('studioPage') ? 'store' : $('subjectId') ? 'story' : $('pairPreview') ? 'paired' : $('promptTemplate') ? 'replica' : '';
     if (!mode) return;
     panel = document.createElement('section'); panel.className = 'card prompt-input-panel'; panel.id = 'promptInputsPanel';
-    panel.innerHTML = '<div class="head"><h2>创作想法与输出要求</h2></div><div class="body"><label for="creativeBrief">我的创作想法</label><textarea id="creativeBrief" placeholder="例如：让人物互动更自然，动作节奏慢一点，多写表情和停顿；同批每条的细节明显不同。"></textarea><label for="outputRequirements">提示词输出要求</label><textarea id="outputRequirements" placeholder="例如：一段完整文字，先交代人物，再写动作；避免重复措辞；画面描述简洁具体。"></textarea><label for="outputLanguage">输出语言</label><select id="outputLanguage"><option value="auto">沿用内容类型的语言</option><option value="zh">中文</option><option value="en">英文（中文对白保留）</option></select><div class="wb-toolbar"><button class="btn" data-generate>按这些要求生成提示词</button><button class="btn alt" data-rewrite>按这些要求改写选中提示词</button></div><p data-status role="status">输入会影响模型生成与改写结果。模板保留核心约束，表达和细节由模型创作。</p></div>';
+    panel.innerHTML = '<div class="body"><label for="creativeBrief">创作想法（选填）</label><textarea id="creativeBrief" placeholder="有想法就填写，没有也可以直接生成。"></textarea><div class="wb-toolbar"><button class="btn" data-generate>生成提示词</button><button class="btn alt" data-rewrite>改写选中的提示词</button></div><p data-status role="status"></p></div>';
     const target = $('wbPane-prompts') || $('templateEditor');
     target?.prepend(panel);
     if (mode === 'store') {
-      const result = document.createElement('section'); result.className='card'; result.innerHTML='<div class="head"><h2>大模型生成的提示词</h2></div><div class="body"><textarea id="actionModelPrompt" class="prompt-full-output" placeholder="选好底图与模板，填写创作想法，点击生成提示词。生成后可直接修改，再生成试片。"></textarea><p id="actionDraftState" role="status">尚未生成提示词</p></div>';
+      panel.querySelector('.wb-toolbar').remove();
+      const result = document.createElement('section'); result.className='card'; result.innerHTML='<div class="head"><h2>提示词</h2><span id="actionDraftState" role="status">尚未生成</span></div><div class="body"><div class="wb-toolbar"><button class="btn alt" id="selectAllActionPrompts">全选</button><button class="btn alt" id="clearActionPromptSelection">全不选</button><span id="actionSelectedCount"></span></div><div id="actionPromptList"><p class="hint">生成的提示词会显示在这里。</p></div></div>';
       panel.after(result);
     }
-    try { const saved = JSON.parse(localStorage.getItem(storageKey) || '{}'); for (const [key,value] of Object.entries(saved)) if ($(key)) $(key).value = value; } catch {}
+    try { const saved = JSON.parse(localStorage.getItem(storageKey) || '{}'); $('creativeBrief').value=[saved.creativeBrief,saved.outputRequirements,saved.outputLanguage==='en'?'输出英文提示词':''].filter(Boolean).join('\n'); } catch {}
     panel.addEventListener('input', () => { try { localStorage.setItem(storageKey, JSON.stringify(read())); } catch {} });
-    if(mode==='store'||mode==='replica')panel.querySelector('[data-rewrite]').textContent='按这些要求改写当前提示词';
-    panel.querySelector('[data-generate]').onclick=()=>generate(); panel.querySelector('[data-rewrite]').onclick=()=>generate(true);
+    if(mode==='replica')panel.querySelector('[data-rewrite]').textContent='改写当前模板';
+    if(mode!=='store'){panel.querySelector('[data-generate]').onclick=()=>generate();panel.querySelector('[data-rewrite]').onclick=()=>generate(true);}
     document.dispatchEvent(new Event('workbench:prompt-inputs-ready'));
   }
   window.PromptInputs={read};

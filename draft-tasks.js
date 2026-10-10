@@ -23,8 +23,8 @@ export class DraftTasks {
     if (existing) return existing;
     const task = { id: randomUUID(), requestId: input.requestId, createdAt: new Date().toISOString(), status: 'running' };
     this.tasks.unshift(task); this.save();
-    Promise.resolve().then(() => this.draft(input)).then(result => {
-      task.result = result; task.status = 'complete';
+    Promise.resolve().then(() => this.draft(input, progress => { Object.assign(task, progress); this.save(); })).then(result => {
+      task.result = result; task.status = 'complete'; delete task.partialItems;
     }).catch(error => { task.error = error.message; task.status = 'error'; }).finally(() => this.save());
     return task;
   }

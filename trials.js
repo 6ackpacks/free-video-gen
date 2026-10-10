@@ -30,6 +30,7 @@ export class TrialManager {
   constructor(file, queue, references) {
     this.file = file; this.queue = queue; this.references = references;
     this.approving = new Set();
+    this.submitting = new Map();
     this.items = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : [];
   }
   save() {
@@ -37,17 +38,18 @@ export class TrialManager {
     fs.renameSync(this.file + '.tmp', this.file);
   }
   view(item) {
-    const rawTrialJob = this.queue.state.jobs.find(job => job.batchId === item.trialBatchId);
+    const initialJobs = this.queue.state.jobs.filter(job => job.batchId === item.trialBatchId);
+    const rawTrialJob = initialJobs[0];
     const trialJob = rawTrialJob ? Object.fromEntries(Object.entries(rawTrialJob).filter(([key]) => key !== 'referenceImageUrl')) : null;
     const bulk = item.bulkBatchId ? this.queue.state.jobs.filter(job => job.batchId === item.bulkBatchId) : [];
-    const jobs = [trialJob, ...bulk].filter(Boolean).sort((a, b) => a.index - b.index).map(job => ({
+    const jobs = [...initialJobs, ...bulk].filter(Boolean).sort((a, b) => a.index - b.index).map(job => ({
       id: job.id, index: job.index, status: job.status, outputs: job.outputs, error: job.error || '',
       actionId: job.actionId, actionName: job.actionName, endState: job.endState,
       prompt: job.prompt, promptSections: job.promptSections, characters: job.characters
     }));
     return {
       id: item.id, createdAt: item.createdAt, workflow: item.workflow || 'template-actions', packId: item.packId || 'foot-spa-store', skillId: item.skillId, skillName: item.skillName,
-      count: item.count, description: item.description, referenceId: item.referenceId, generationMethod: item.generationMethod || 'apimart',
+      count: item.count, submissionMode: item.submissionMode || 'trial-first', description: item.description, referenceId: item.referenceId, generationMethod: item.generationMethod || 'apimart',
       videoRoute: item.videoRoute || item.generationMethod || 'apimart', videoModel: item.videoModel || '', duration: item.duration, resolution: item.resolution, ratio: item.ratio, userPrompt: item.userPrompt || '',
       actionMode: item.actionMode, actionId: item.actionId, actionName: item.actionName, sceneProfile: item.sceneProfile,
       trialBatchId: item.trialBatchId, trialJob: trialJob || null, bulkBatchId: item.bulkBatchId || null,
@@ -68,10 +70,20 @@ export class TrialManager {
     return this.view(item);
   }
   async create(input) {
+    if (!Array.isArray(input.preparedPrompts) || !input.requestId) return this.createInternal(input);
+    if (this.submitting.has(input.requestId)) return this.submitting.get(input.requestId);
+    const pending = this.createInternal(input);
+    this.submitting.set(input.requestId, pending);
+    try { return await pending; } finally { this.submitting.delete(input.requestId); }
+  }
+  async createInternal(input) {
     if (input.workflow === 'fixed-massage') return this.createFixedMassage(input);
+    const direct = Array.isArray(input.preparedPrompts);
+    if (direct && input.requestId) { const existing = this.items.find(item => item.requestId === input.requestId); if (existing) return this.view(existing); }
     if (!this.queue.provider?.promptModel) throw new Error('请先配置 Qwen 提示词模型；实际任务的人物外貌与穿搭由大模型生成');
     const count = Number(input.count);
     if (!Number.isInteger(count) || count < 1 || count > 500) throw new Error('生成数量须为 1–500');
+    if (direct && (input.preparedPrompts.length !== count || new Set(input.preparedPrompts.map(item => item.id)).size !== count)) throw Error('勾选的提示词数量或条目不正确');
     const description = String(input.description || input.userPrompt || '').trim().slice(0, 3000);
     const referenceId = String(input.referenceId || '');
     if (!referenceId) throw new Error('请先上传并固定一张底图');
@@ -90,7 +102,8 @@ export class TrialManager {
     const recentActionIds = this.items.filter(item => (item.packId || 'foot-spa-store') === pack.id).slice(0, 20).map(x => x.actionId).filter(Boolean);
     const planned = [];
     for (let i = 1; i <= count; i++) {
-      const template = selectTemplate({ templates, actionId: i === 1 && input.preparedPrompt ? input.preparedPrompt.actionId : input.actionId, mode: i === 1 && input.preparedPrompt ? 'manual' : actionMode, recentActionIds: [...recentActionIds, ...planned.map(x => x.actionId)] });
+      const reviewed = direct ? input.preparedPrompts[i-1] : (i === 1 ? input.preparedPrompt : null);
+      const template = selectTemplate({ templates, actionId: reviewed ? reviewed.actionId : input.actionId, mode: reviewed ? 'manual' : actionMode, recentActionIds: [...recentActionIds, ...planned.map(x => x.actionId)] });
       planned.push({
         id: randomUUID(), index: i, packId: pack.id, skillId: `${pack.id}-locked-actions`, skillName: template.name,
         prompt: '', promptSections: null, lockedPrompt: false, actionTemplate: template, promptMode: 'template-skill-v1', ...promptInputs(input),
@@ -98,6 +111,14 @@ export class TrialManager {
         sceneProfile: reference.sceneProfile, characters: [], outfitPreferences: input.outfitPreferences || {}, description, userPrompt: description,
         referenceId, generationMethod, videoRoute, videoModel, duration, resolution, ratio, seed: Math.floor(Math.random() * 2147483647)
       });
+    }
+    if (direct) {
+      for (let offset = 0; offset < planned.length; offset++) {
+        const reviewed = input.preparedPrompts[offset], job = planned[offset];
+        if (actionContextKey(job) !== reviewed.contextKey) throw Error('底图、模板或生成设置已变化，请重新生成提示词');
+        const prepared = parseActionDraft(JSON.stringify(reviewed), job);
+        Object.assign(job, { prompt: prepared.prompt, characters: prepared.characters, promptSections: prepared.promptSections, lockedPrompt: true, promptSource: prepared.promptSource, promptDraftId: reviewed.id });
+      }
     }
     if (input.preparedPrompt) {
       if (actionContextKey(planned[0]) !== input.preparedPrompt.contextKey) throw Error('模板、底图或创作要求已变化，请重新生成提示词');
@@ -107,13 +128,15 @@ export class TrialManager {
     }
     const referenceImageUrl = videoRoute.startsWith('wan-') ? this.references.source(referenceId, 'data-url') : (videoRoute === 'apimart' ? await this.references.ensure(referenceId) : '');
     for (const job of planned) { job.referenceId = referenceId; job.referenceImageUrl = referenceImageUrl; job.generationMethod = generationMethod; }
-    const batch = this.queue.enqueue([planned[0]]);
+    if (direct && videoRoute === 'doubao') await this.queue.provider.doubao?.prepareBatch(planned.length);
+    const batch = this.queue.enqueue(direct ? planned : [planned[0]]);
     const item = {
       id: randomUUID(), createdAt: new Date().toISOString(), packId: pack.id, skillId: `${pack.id}-locked-actions`, skillName: planned[0].skillName,
       count, description, userPrompt: description, referenceId, generationMethod, videoRoute, videoModel, duration, resolution, ratio, actionMode, actionId: planned[0].actionId,
       actionName: planned[0].actionName, sceneProfile: reference.sceneProfile,
       ...promptInputs(input),
-      trialBatchId: batch.id, bulkBatchId: '', remaining: planned.slice(1)
+      submissionMode: direct ? 'selected-prompts' : 'trial-first', requestId: input.requestId || '',
+      trialBatchId: batch.id, bulkBatchId: direct ? 'none' : '', remaining: direct ? [] : planned.slice(1)
     };
     this.items.unshift(item); this.save();
     return this.view(item);
