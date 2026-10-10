@@ -7,6 +7,12 @@ import { PassThrough } from 'node:stream';
 import { once } from 'node:events';
 import { test } from 'node:test';
 import { MediaStore } from './media.js';
+test('旧任务主地址403时恢复备用地址，预览与保存都不会下载错误页',async t=>{
+  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'fallback-media-'));t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));
+  let refreshed=0;const store=new MediaStore(dir,{maxKbps:8192,resolveOutputs:async()=>{refreshed++;return [{url:'https://example.test/expired'},{url:'https://example.test/backup'}];}});
+  const calls=[];store.direct=async url=>{calls.push(url);const remote=Readable.from([Buffer.from('valid-video')]);remote.statusCode=url.endsWith('expired')?403:200;remote.headers={'content-length':'11'};return remote;};
+  const job={id:'old',outputs:['https://example.test/expired']};await store.save(job);assert.equal(refreshed,1);assert.equal(fs.readFileSync(store.filename(job),'utf8'),'valid-video');assert.ok(calls.includes('https://example.test/backup'));
+});
 test('按需预览转发范围并在完整下载前送出首段，断开释放源连接',async t=>{
   const directory=fs.mkdtempSync(path.join(os.tmpdir(),'progressive-preview-'));t.after(()=>fs.rmSync(directory,{recursive:true,force:true}));
   const store=new MediaStore(directory),remote=new PassThrough();remote.statusCode=206;remote.headers={'content-range':'bytes 100-199/1000','content-length':'100','accept-ranges':'bytes'};

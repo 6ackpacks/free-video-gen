@@ -6,6 +6,25 @@
     return result;
   };
   let currentDialog;
+  document.addEventListener('click',async event=>{
+    const link=event.target.closest('a[download][href^="/api/video/"]');
+    const id=link&&/^\/api\/video\/([a-f0-9-]{36})/.exec(link.getAttribute('href'))?.[1];
+    if(!id||link.dataset.prepared==='1')return;
+    event.preventDefault();event.stopImmediatePropagation();
+    const dialog=window.WorkbenchUI.dialog('准备 MP4 下载'),box=dialog.querySelector('.wb-dialog-body');
+    box.innerHTML='<p role="status">正在检查并保存成片…</p><progress style="width:100%"></progress><a class="btn" download hidden>下载 MP4</a>';
+    const status=box.querySelector('[role=status]'),progress=box.querySelector('progress'),download=box.querySelector('a');download.dataset.prepared='1';download.href=link.getAttribute('href');
+    try {
+      let state=await api(`/video/${id}/cache`,{method:'POST'});
+      while(dialog.open&&!state.ready){
+        if(state.error)throw Error(state.error);
+        const mb=n=>(n/1048576).toFixed(1);status.textContent=`正在保存 ${mb(state.bytes)}${state.totalBytes?' / '+mb(state.totalBytes):''} MB，完成后可以下载。`;
+        if(state.totalBytes){progress.max=state.totalBytes;progress.value=state.bytes;}
+        await new Promise(resolve=>setTimeout(resolve,1000));state=await api(`/video/${id}/cache`);
+      }
+      if(!dialog.open)return;progress.hidden=true;download.hidden=false;status.textContent='MP4 已保存到本机。点击下载按钮，选择保存位置。';
+    }catch(error){progress.hidden=true;status.textContent='下载准备失败：'+error.message+'；请关闭后重试。';}
+  },true);
   function open(url) {
     const id = /^\/api\/video\/([a-f0-9-]{36})/i.exec(url)?.[1];
     if (!id) return;
@@ -16,6 +35,7 @@
     body.classList.add('wb-video-preview');
     body.innerHTML = '<div class="wb-preview-title"></div><video controls playsinline preload="metadata" hidden></video><div class="wb-preview-status" role="status"></div><progress hidden></progress><div class="wb-toolbar"><button data-prev>上一条</button><span data-position></span><button data-next>下一条</button><button data-retry hidden>重新加载</button><button data-cache>保存到本机</button><a class="btn alt" download>下载此条</a></div>';
     const video = body.querySelector('video'), status = body.querySelector('[role=status]'), progress = body.querySelector('progress');
+    if(window.StorySubtitles){const subtitles=document.createElement('button');subtitles.textContent='字幕渲染';subtitles.onclick=()=>{const jobId=jobs[index]?.id;if(jobId){dialog.close();window.StorySubtitles.open(jobId);}};body.querySelector('.wb-toolbar').appendChild(subtitles);}
     const previous = body.querySelector('[data-prev]'), next = body.querySelector('[data-next]'), retry = body.querySelector('[data-retry]');
     let jobs = [], index = 0, timer, revision = 0;
     function stop() { clearTimeout(timer); video.pause(); video.removeAttribute('src'); video.load(); }

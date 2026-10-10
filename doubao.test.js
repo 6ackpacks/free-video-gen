@@ -72,6 +72,7 @@ test('concurrent status checks share one manager task snapshot', async () => {
   assert.equal(one.status, 'complete');
   assert.equal(two.status, 'running');
 });
+test('豆包完成任务保留主地址、备用地址与回退地址',async()=>{const bridge=new DoubaoBridge();bridge.request=async()=>[{id:'one',status:'succeeded',result_url:'https://example.test/primary',backup_result_url:'https://example.test/backup',fallback_result_url:'https://example.test/fallback'}];assert.equal((await bridge.status('one')).outputs.length,3);});
 
 test('豆包任务回传执行账号、进度和取消原因', async () => {
   const bridge = new DoubaoBridge();

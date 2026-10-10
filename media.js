@@ -4,11 +4,6 @@ import https from 'node:https';
 import { once } from 'node:events';
 import { setTimeout as delay } from 'node:timers/promises';
 
-const getUrl = job => {
-  const output = job?.outputs?.find(item => /^https:\/\//i.test(typeof item === 'string' ? item : item.url || ''));
-  if (!output) throw new Error('视频尚未生成或缺少 HTTPS 链接');
-  return typeof output === 'string' ? output : output.url;
-};
 const directAgent = new https.Agent({ keepAlive: true });
 const crcTable = Uint32Array.from({ length: 256 }, (_, i) => {
   let c = i;
@@ -26,6 +21,8 @@ export class MediaStore {
     this.saves = new Map();
     this.transfers = new Map();
     this.saveQueue = Promise.resolve();
+    this.resolveOutputs = options.resolveOutputs;
+    this.preferred = new Map();
     const kbps = Number(options.maxKbps ?? process.env.VIDEO_MEDIA_MAX_KBPS ?? 128);
     if (!Number.isFinite(kbps) || kbps < 16 || kbps > 8192) throw new Error('VIDEO_MEDIA_MAX_KBPS 必须在 16–8192 之间');
     this.bytesPerSecond = kbps * 1024;
@@ -66,7 +63,7 @@ export class MediaStore {
     if (preview && !download && !fs.existsSync(file)) {
       const range = req.headers.range;
       if (range && !/^bytes=(?:\d+-\d*|-\d+)$/.test(range)) { res.writeHead(416); return res.end(); }
-      const remote = await this.direct(getUrl(job), range ? { Range: range } : {});
+      const {remote} = await this.openSource(job, range ? { Range: range } : {});
       if (res.destroyed) { remote.destroy(); return; }
       if (![200,206,416].includes(remote.statusCode)) { remote.destroy(); throw Error(`预览源返回 HTTP ${remote.statusCode}`); }
       const headers = { 'Content-Type':'video/mp4', 'Cache-Control':'private, max-age=3600' };
@@ -77,11 +74,26 @@ export class MediaStore {
       remote.pipe(res);
       return;
     }
-    // A preview must use the same bounded download path as a ZIP download.
-    // Streaming the origin directly to the browser bypasses the speed limit.
+    // Full downloads use the bounded, resumable local cache.
     if (!fs.existsSync(file)) await this.save(job);
     if (res.destroyed) return;
     return this.serveLocal(file, job, req, res, download);
+  }
+  async openSource(job, headers = {}) {
+    const urls = () => [...new Set([this.preferred.get(job.id), ...(job.outputs||[]).map(item=>typeof item==='string'?item:item.url)].filter(url=>/^https:\/\//i.test(url||'')))];
+    let failure;
+    for(let pass=0;pass<2;pass++) {
+      for(const url of urls()) {
+        try {
+          const remote=await this.direct(url,headers);
+          if([200,206,416].includes(remote.statusCode)) { this.preferred.set(job.id,url); return {remote,url}; }
+          failure=new Error(`视频源返回 HTTP ${remote.statusCode}`);remote.destroy();
+        } catch(error) { failure=error; }
+      }
+      if(pass===0&&this.resolveOutputs) { const outputs=await this.resolveOutputs(job);if(outputs?.length)job.outputs=outputs;else break; }
+      else break;
+    }
+    throw failure||new Error('视频尚未生成或没有可用地址');
   }
   serveLocal(file, job, req, res, download = false) {
     const size = fs.statSync(file).size;
@@ -112,8 +124,14 @@ export class MediaStore {
     if (fs.existsSync(file)) return file;
     const part = file + '.part';
     let offset = fs.existsSync(part) ? fs.statSync(part).size : 0;
-    let remote = await this.direct(getUrl(job), offset ? { Range: `bytes=${offset}-` } : {});
-    if (offset && remote.statusCode !== 206) { remote.destroy(); fs.rmSync(part, { force: true }); offset = 0; remote = await this.direct(getUrl(job)); }
+    // Probe the working source before resuming: expired primary URLs must fall back.
+    const selected=await this.openSource(job,offset?{Range:'bytes=0-0'}:{});
+    if(offset)selected.remote.destroy();
+    const sourceFile=part+'.source';
+    if(offset&&(!fs.existsSync(sourceFile)||fs.readFileSync(sourceFile,'utf8')!==selected.url)){fs.rmSync(part,{force:true});offset=0;}
+    fs.writeFileSync(sourceFile,selected.url);
+    let remote = offset ? await this.direct(selected.url,{Range:`bytes=${offset}-`}) : selected.remote;
+    if (offset && remote.statusCode !== 206) { remote.destroy(); fs.rmSync(part, { force: true }); offset = 0; remote = await this.direct(selected.url); }
     if (![200, 206].includes(remote.statusCode)) { remote.resume(); throw new Error(`下载失败：HTTP ${remote.statusCode}`); }
     this.transfers.set(job.id, { totalBytes: Number(remote.headers['content-length']) > 0 ? offset + Number(remote.headers['content-length']) : 0 });
     const stream = fs.createWriteStream(part, { flags: offset ? 'a' : 'w' });
@@ -130,6 +148,7 @@ export class MediaStore {
       const expected = Number(remote.headers['content-length']);
       if (Number.isFinite(expected) && expected > 0 && fs.statSync(part).size !== offset + expected) throw new Error('视频传输不完整，保留断点供下次继续');
       fs.renameSync(part, file);
+      fs.rmSync(sourceFile,{force:true});
       return file;
     } catch (error) { stream.destroy(); throw error; }
   }

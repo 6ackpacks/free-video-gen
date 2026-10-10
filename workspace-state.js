@@ -39,9 +39,14 @@ export class WorkspaceState {
     const name=String(input.name||'').trim().slice(0,80);if(!name)throw Error('请填写预设名称');
     const replica=normalizeReplica(input.replica);const existing=input.id&&this.state.presets.find(p=>p.id===input.id&&p.kind==='replica');if(input.id&&!existing)throw Error('预设不存在');
     const raw=input.settings||existing?.settings||{},refs=[...new Set(raw.referenceImageIds||[])];if(refs.length>3||refs.some(id=>!/^[-a-f0-9]{36}$/i.test(id)))throw Error('预设图片格式无效');
-    const settings={videoRoute:String(raw.videoRoute||'').slice(0,40),duration:Number(raw.duration)||15,resolution:String(raw.resolution||'').slice(0,40),ratio:['9:16','16:9','1:1'].includes(raw.ratio)?raw.ratio:'9:16',referenceImageIds:refs};
-    const preset={settings,id:existing?.id||randomUUID(),name,kind:'replica',page:'/clone',fields:{},templateIds:[],replica,createdAt:existing?.createdAt||new Date().toISOString(),updatedAt:new Date().toISOString()};
+    const settings={videoRoute:String(raw.videoRoute||'').slice(0,40),duration:Number(raw.duration)||5,resolution:String(raw.resolution||'').slice(0,40),ratio:['9:16','16:9','1:1'].includes(raw.ratio)?raw.ratio:'9:16',referenceImageIds:refs,referenceMode:raw.referenceMode==='first-frame'?'first-frame':'reference-image',actionPackId:String(raw.actionPackId||'').slice(0,36),creativeBrief:String(raw.creativeBrief||'').slice(0,2000)};
+    const preset={settings,id:existing?.id||randomUUID(),name,customer:String(input.customer??existing?.customer??'').trim().slice(0,80),category:String(input.category??existing?.category??'通用').trim().slice(0,40),sourceId:String(input.sourceId??existing?.sourceId??'').slice(0,36),kind:'replica',page:'/clone',fields:{},templateIds:[],replica,createdAt:existing?.createdAt||new Date().toISOString(),updatedAt:new Date().toISOString()};
     if(existing)Object.assign(existing,preset);else this.state.presets.unshift(preset);this.save();return preset;
+  }
+  saveActionPack(input){
+    const name=String(input.name||'').trim().slice(0,80),actions=[...new Set((input.actions||[]).map(s=>String(s).trim().slice(0,700)).filter(Boolean))];if(!name||!actions.length||actions.length>30)throw Error('请填写动作包名称及1–30个动作');
+    this.state.actionPacks||=[];const existing=input.id&&this.state.actionPacks.find(p=>p.id===input.id);if(input.id&&!existing)throw Error('动作包不存在');
+    const pack={id:existing?.id||randomUUID(),name,customer:String(input.customer||'').trim().slice(0,80),actions,createdAt:existing?.createdAt||new Date().toISOString()};if(existing)Object.assign(existing,pack);else this.state.actionPacks.unshift(pack);this.save();return pack;
   }
   removePreset(id) {
     if (!this.state.presets.some(p => p.id === id)) throw Error('预设不存在');

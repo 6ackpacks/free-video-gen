@@ -116,7 +116,7 @@ export class DoubaoBridge {
     const task = tasks.find(item => item.id === id);
     if (!task) throw new Error('豆包任务不存在');
     const status = task.status === 'succeeded' ? 'complete' : ['failed', 'cancelled'].includes(task.status) ? 'error' : task.status === 'queued' ? 'waiting' : 'running';
-    const url = task.result_url || task.backup_result_url || task.fallback_result_url;
-    return { status, outputs: url ? [{ url }] : [], error: status === 'error' ? (task.error || task.error_message || '豆包任务已停止') : '', progress: { accountId: task.account_id || '', accountName: task.account_name || '', conversationId: task.conversation_id || '', stage: task.status, message: task.error || task.error_message || '' } };
+    const urls = [...new Set([task.result_url, task.backup_result_url, task.fallback_result_url].filter(url=>/^https:\/\//i.test(url||'')))];
+    return { status, outputs: urls.map(url=>({url})), error: status === 'error' ? (task.error || task.error_message || '豆包任务已停止') : '', progress: { accountId: task.account_id || '', accountName: task.account_name || '', conversationId: task.conversation_id || '', stage: task.status, message: task.error || task.error_message || '' } };
   }
 }
