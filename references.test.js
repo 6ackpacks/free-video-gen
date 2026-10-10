@@ -5,6 +5,23 @@ import path from 'node:path';
 import test from 'node:test';
 import { ReferenceLibrary } from './references.js';
 
+test('仓库保留原图与加工图，跨用途选作底图不改变原资料归属且重复选用不重复复制', t => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'reference-warehouse-'));
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const library = new ReferenceLibrary(directory, null);
+  const original = library.add({ name: '商品原图', mime: 'image/png', base64: Buffer.from('original').toString('base64'), purpose: 'story-product' });
+  const processed = library.add({ name: '用户加工图', mime: 'image/png', base64: Buffer.from('processed').toString('base64'), assetKind: 'processed' });
+  const background = library.useAsBackground(original.id);
+  assert.notEqual(background.id, original.id);
+  assert.equal(library.get(original.id).purpose, 'story-product');
+  assert.equal(library.get(processed.id).assetKind, 'processed');
+  assert.equal(library.useAsBackground(original.id).id, background.id);
+  assert.equal(library.list().length, 3);
+  const reloaded = new ReferenceLibrary(directory, null);
+  assert.equal(reloaded.get(processed.id).assetKind, 'processed');
+  assert.equal(fs.readFileSync(reloaded.fileFor(background.id).filename, 'utf8'), 'original');
+});
+
 test('旧场景档案读出和新档案保存时使用一致的房门证据', t => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'reference-evidence-'));
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }));

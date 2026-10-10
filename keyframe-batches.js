@@ -127,7 +127,7 @@ export class KeyframeBatchManager {
         return { pairId: item.pairId, referenceId: item.resultReferenceId, referenceMode: direction.referenceMode, videoPrompt: direction.prompt, promptVersion: direction.promptVersion, camera: direction.camera, motion: direction.motion, userDirection: direction.userDirection, variation: item.variation, seed: item.seed };
       })
     }, this.references);
-    const videoBatch = this.queue.enqueue(jobs);
+    const videoBatch = this.queue.enqueue(jobs, { reviewFirst: true });
     batch.videoBatchIds = Array.isArray(batch.videoBatchIds) ? batch.videoBatchIds : (batch.videoBatchId ? [batch.videoBatchId] : []);
     batch.videoBatchIds.push(videoBatch.id); batch.videoBatchId = videoBatch.id; batch.confirmedAt = new Date().toISOString(); batch.acceptedItemIds = [...selected]; this.save();
     return { imageBatch: this.view(batch), videoBatch };

@@ -33,7 +33,7 @@ export class ReferenceLibrary {
   }
   public(item) {
     const { id, name, mime, bytes, createdAt, sceneProfile = null, analysisStatus = 'pending', analysisError = '' } = item;
-    return { id, name, mime, bytes, createdAt, purpose: this.purposeOf(item), sceneProfile: sceneProfile ? { ...sceneProfile, sceneTags: sceneEvidenceTags(sceneProfile) } : null, analysisStatus, analysisError, previewUrl: `/api/references/${id}/image` };
+    return { id, name, mime, bytes, createdAt, purpose: this.purposeOf(item), assetKind: item.assetKind || (item.derivedFrom ? 'processed' : this.purposeOf(item) === 'paired-keyframe' ? 'generated' : 'original'), derivedFrom: item.derivedFrom || '', sceneProfile: sceneProfile ? { ...sceneProfile, sceneTags: sceneEvidenceTags(sceneProfile) } : null, analysisStatus, analysisError, previewUrl: `/api/references/${id}/image` };
   }
   list(purpose = '') { return this.items.filter(item => !purpose || this.purposeOf(item) === purpose).map(item => this.public(item)); }
   get(id) { const item = this.items.find(x => x.id === id); if (!item) throw new Error('参考图不存在'); return this.public(item); }
@@ -47,7 +47,7 @@ export class ReferenceLibrary {
     const name = String(input.name || '背景参考').trim().slice(0, 80);
     fs.writeFileSync(path.join(this.assets, id + formats[mime]), bytes);
     const purpose = purposes.has(input.purpose) ? input.purpose : 'store-background';
-    const item = { id, name, mime, bytes: bytes.length, createdAt: new Date().toISOString(), purpose, remoteUrl: '', expiresAt: 0, sceneProfile: null, analysisStatus: 'pending', analysisError: '' };
+    const item = { id, name, mime, bytes: bytes.length, createdAt: new Date().toISOString(), purpose, assetKind: input.assetKind === 'processed' ? 'processed' : 'original', remoteUrl: '', expiresAt: 0, sceneProfile: null, analysisStatus: 'pending', analysisError: '' };
     this.items.unshift(item); this.save();
     return this.list()[0];
   }
@@ -66,6 +66,19 @@ export class ReferenceLibrary {
     fs.rmSync(path.join(this.assets, item.id + formats[item.mime]), { force: true });
     this.save();
     return this.public(item);
+  }
+  useAsBackground(id) {
+    const { item, filename } = this.fileFor(id);
+    if (this.purposeOf(item) === 'store-background') return this.public(item);
+    const existing = this.items.find(x => this.purposeOf(x) === 'store-background' && x.warehouseSourceId === id);
+    if (existing) return this.public(existing);
+    const ref = this.addBuffer({ name: item.name, mime: item.mime, bytes: fs.readFileSync(filename), derivedFrom: item.derivedFrom || '', purpose: 'store-background' });
+    const copy = this.items.find(x => x.id === ref.id);
+    copy.warehouseSourceId = id;
+    copy.assetKind = this.public(item).assetKind;
+    copy.sceneProfile = item.sceneProfile ? structuredClone(item.sceneProfile) : null;
+    copy.analysisStatus = copy.sceneProfile ? 'complete' : 'pending';
+    this.save(); return this.public(copy);
   }
   fileFor(id) {
     const item = this.items.find(x => x.id === id);

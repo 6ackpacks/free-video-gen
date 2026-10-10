@@ -1,3 +1,4 @@
+import { promptInputs } from './prompt-guidance.js';
 import { randomUUID } from 'node:crypto';
 
 export const STORY_SCENES = {
@@ -66,10 +67,19 @@ export async function draftStoryPromptBatch(input, provider) {
   let lastError;
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
-      const result = await provider.draftStoryPrompts({ count, brandName, brief, duration, template: input.template, selectedAssets: input.selectedAssets || [], referenceMode: input.referenceMode || 'text-only', priorities: input.priorities || '', storyIdea: input.storyIdea || '', sceneId, sceneName: STORY_SCENES[sceneId].name, retryInstruction: attempt > 1 ? '上一批结构不完整、故事重复或品牌落点错误。本次必须修正。' : '' });
+      const result = await provider.draftStoryPrompts({ count, brandName, brief, duration, ...promptInputs(input), template: input.template, selectedAssets: input.selectedAssets || [], referenceMode: input.referenceMode || 'text-only', priorities: input.priorities || '', storyIdea: input.storyIdea || '', sceneId, sceneName: STORY_SCENES[sceneId].name, retryInstruction: attempt > 1 ? '上一批结构不完整、故事重复或品牌落点错误。本次必须修正。' : '' });
       if (!Array.isArray(result?.items) || result.items.length !== count) throw new Error(`模型必须返回 ${count} 条短剧结构`);
       const items = result.items.map((draft, offset) => buildStoryPrompt({ index: offset + 1, brandName, brief, sceneId, duration, template: input.template, priorities: input.priorities, storyIdea: input.storyIdea, subjectId: input.subjectId, draft }));
       if (new Set(items.map(item => item.beats ? JSON.stringify(item.beats) : `${item.dialogueA}|${item.dialogueB}|${item.adLine}`)).size !== items.length) throw new Error('短剧对白出现重复');
+      const guidance = promptInputs(input);
+      if (guidance.outputRequirements || guidance.outputLanguage !== 'auto') {
+        try {
+          if (!provider.rewritePrompts) throw Error('当前模型不支持完整提示词改写');
+          const rewritten = await provider.rewritePrompts({ mode: 'story', ...guidance, context: { brandName, brief, duration, template: input.template }, items: items.map(item => ({ id: item.id, prompt: item.prompt })) });
+          const texts = new Map(rewritten.items.map(item => [item.id, item.prompt]));
+          for (const item of items) { if (!texts.get(item.id)) throw Error('模型没有返回对应短剧提示词'); item.prompt = texts.get(item.id); }
+        } catch (error) { error.transient = true; throw error; }
+      }
       return { count, duration, sceneId, sceneName: STORY_SCENES[sceneId].name, items, attempts: attempt };
     } catch (error) { if(error.transient||error.status){throw new Error('短剧提示词接口请求失败：'+error.message,{cause:error});} lastError = error; }
   }

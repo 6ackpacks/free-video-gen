@@ -1,3 +1,4 @@
+import { promptInputs } from './prompt-guidance.js';
 import { FEMALE_WARDROBE_RULES } from './wardrobe-rules.js';
 import { planPromptPairs, hasForbiddenAppearance } from './paired-prompts.js';
 
@@ -16,7 +17,7 @@ export async function draftKeyframePromptBatch(input, provider) {
   for (let attempt = 1; attempt <= 4; attempt++) {
     const drafted = await provider.draftKeyframePrompts({
       count, sceneMode: input.sceneMode || 'mixed', focusMode: input.focusMode || 'mixed', footMode: input.footMode || 'mixed',
-      userDirection: clean(input.imagePrompt, 2000),
+      userDirection: clean(input.imagePrompt, 2000), ...promptInputs(input),
       requiredFields: ['appearance', 'clothing'],
       retryInstruction: attempt > 1 ? `上一批人物描述未通过检查。本次必须写明 22–32 岁，人物外貌明显不同。${FEMALE_WARDROBE_RULES}` : ''
     });
@@ -35,8 +36,23 @@ export async function draftKeyframePromptBatch(input, provider) {
         const imagePrompt = scaffold.imagePrompt.replace(scaffold.variation.appearance, appearance).replace(scaffold.variation.clothing, clothing);
         return { ...scaffold, identityKey: signature, variation: { ...scaffold.variation, appearance, clothing, promptSource: 'llm' }, imagePrompt };
       });
+      const guidance = promptInputs(input);
+      if (guidance.creativeBrief || guidance.outputRequirements || guidance.outputLanguage !== 'auto') {
+        if (!provider.rewritePrompts) throw Error('当前模型不支持完整提示词改写');
+        for (let offset = 0; offset < items.length; offset += 15) {
+          const slice = items.slice(offset, offset + 15);
+          let rewritten;
+          try { rewritten = await provider.rewritePrompts({ mode: 'paired', ...guidance, context: { template: '家庭上门足部按摩', brand: input.brandText || '伊趣舒心' }, items: slice.flatMap(item => [{ id: item.id + ':image', prompt: item.imagePrompt }, { id: item.id + ':video', prompt: item.videoPrompt }]) }); }
+          catch (error) { error.promptRewriteFailure = true; throw error; }
+          const texts = new Map(rewritten.items.map(item => [item.id, item.prompt]));
+          for (const item of slice) {
+            if (!texts.get(item.id + ':image') || !texts.get(item.id + ':video')) throw Error('模型未返回对应的图片与视频提示词');
+            item.imagePrompt = texts.get(item.id + ':image'); item.videoPrompt = texts.get(item.id + ':video');
+          }
+        }
+      }
       return { source: 'llm', count, items, attempts: attempt };
-    } catch (error) { lastError = error; }
+    } catch (error) { if (error.promptRewriteFailure) throw error; lastError = error; }
   }
   throw new Error(`提示词连续 4 次未通过安全与去重检查：${lastError?.message || '未知错误'}`);
 }

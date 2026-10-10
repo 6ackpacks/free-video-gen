@@ -24,12 +24,27 @@ export class MediaStore {
     fs.mkdirSync(directory, { recursive: true });
     this.runs = new Map();
     this.saves = new Map();
+    this.transfers = new Map();
     this.saveQueue = Promise.resolve();
     const kbps = Number(options.maxKbps ?? process.env.VIDEO_MEDIA_MAX_KBPS ?? 128);
     if (!Number.isFinite(kbps) || kbps < 16 || kbps > 8192) throw new Error('VIDEO_MEDIA_MAX_KBPS 必须在 16–8192 之间');
     this.bytesPerSecond = kbps * 1024;
   }
   filename(job) { return path.join(this.directory, `${job.id}.mp4`); }
+  cacheStatus(job) {
+    const ready = fs.existsSync(this.filename(job));
+    const state = this.transfers.get(job.id) || {};
+    const part = this.filename(job) + '.part';
+    const bytes = ready ? fs.statSync(this.filename(job)).size : fs.existsSync(part) ? fs.statSync(part).size : 0;
+    return { ready, running: this.saves.has(job.id), bytes, totalBytes: ready ? bytes : state.totalBytes || 0, error: ready ? '' : state.error || '' };
+  }
+  prepare(job) {
+    if (!this.cacheStatus(job).ready && !this.saves.has(job.id)) {
+      this.transfers.set(job.id, {});
+      this.save(job).catch(error => this.transfers.set(job.id, { ...this.transfers.get(job.id), error: error.message }));
+    }
+    return this.cacheStatus(job);
+  }
   async direct(url, headers = {}, redirects = 0) {
     if (redirects > 3) throw new Error('视频地址重定向次数过多');
     const parsed = new URL(url);
@@ -85,6 +100,7 @@ export class MediaStore {
     let remote = await this.direct(getUrl(job), offset ? { Range: `bytes=${offset}-` } : {});
     if (offset && remote.statusCode !== 206) { remote.destroy(); fs.rmSync(part, { force: true }); offset = 0; remote = await this.direct(getUrl(job)); }
     if (![200, 206].includes(remote.statusCode)) { remote.resume(); throw new Error(`下载失败：HTTP ${remote.statusCode}`); }
+    this.transfers.set(job.id, { totalBytes: Number(remote.headers['content-length']) > 0 ? offset + Number(remote.headers['content-length']) : 0 });
     const stream = fs.createWriteStream(part, { flags: offset ? 'a' : 'w' });
     try {
       const started = Date.now();

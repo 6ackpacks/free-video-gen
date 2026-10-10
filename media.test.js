@@ -8,6 +8,28 @@ import { once } from 'node:events';
 import { test } from 'node:test';
 import { MediaStore } from './media.js';
 
+test('异步试览准备显示状态、复用同一下载，失败可重试', async t => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'video-cache-status-'));
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const store = new MediaStore(directory, { maxKbps: 8192 });
+  const job = { id: 'cache-status', outputs: ['https://example.test/video.mp4'] };
+  let calls = 0;
+  store.direct = async () => { calls++; throw Error('网络中断'); };
+  assert.equal(store.prepare(job).running, true);
+  store.prepare(job);
+  await Promise.allSettled([...store.saves.values()]);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(calls, 1);
+  assert.match(store.cacheStatus(job).error, /网络中断/);
+  store.direct = async () => { calls++; const remote = Readable.from([Buffer.from('video')]); remote.statusCode = 200; remote.headers = { 'content-length': '5' }; return remote; };
+  store.prepare(job);
+  await Promise.allSettled([...store.saves.values()]);
+  assert.equal(store.cacheStatus(job).ready, true);
+  assert.equal(store.cacheStatus(job).bytes, 5);
+  assert.equal(store.cacheStatus(job).error, '');
+  assert.equal(calls, 2);
+});
+
 test('preview and batch saves share a single limited transfer', async t => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'video-media-'));
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }));

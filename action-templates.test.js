@@ -79,7 +79,7 @@ test('random selection only chooses compatible templates', () => {
   for (let i = 0; i < 100; i++) assert.equal(selectTemplate({ templates, mode: 'random' }).compatibility.compatible, true);
 });
 
-test('trial planning keeps one locked template per video for Qwen character drafting', async () => {
+test('trial planning passes action constraints to the model for complete prompt drafting', async () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'locked-action-trial-'));
   const queue = {
     provider: { promptModel: 'qwen-test' }, state: { jobs: [] },
@@ -92,8 +92,8 @@ test('trial planning keeps one locked template per video for Qwen character draf
   const planned = [queue.state.jobs[0], ...manager.items[0].remaining];
   assert.equal(planned.length, 5);
   for (const job of planned) {
-    assert.equal(job.lockedActionTemplate.id, job.actionId);
-    assert.equal(job.lockedActionTemplate.actionText.length > 20, true);
+    assert.equal(job.actionTemplate.id, job.actionId);
+    assert.equal(job.actionTemplate.actionText.length > 20, true);
     assert.equal(job.prompt, '');
     assert.equal(job.characters.length, 0);
   }

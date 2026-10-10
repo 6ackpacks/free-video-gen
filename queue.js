@@ -31,15 +31,33 @@ export class VideoQueue {
     fs.writeFileSync(temp, JSON.stringify(this.state, null, 2));
     fs.renameSync(temp, this.file);
   }
-  enqueue(planned) {
+  enqueue(planned, { reviewFirst = false } = {}) {
     if (!this.provider) throw new Error('视频 API 尚未配置');
     const batch = { id: randomUUID(), createdAt: new Date().toISOString(), count: planned.length };
     const jobs = planned.map(job => ({ ...job, batchId: batch.id, status: job.lockedPrompt ? 'queued' : (this.provider.draft && this.provider.promptModel ? 'draft_pending' : 'queued'), providerId: null, outputs: [], attempts: 0, draftAttempts: 0, nextAt: 0, error: '', createdAt: batch.createdAt }));
+    if (reviewFirst && jobs.length > 1) {
+      batch.reviewFirst = true; batch.trialJobId = jobs[0].id;
+      for (const job of jobs.slice(1)) { job.reviewResumeStatus = job.status; job.status = 'review_pending'; }
+    }
     this.state.batches.unshift(batch);
     this.state.jobs.unshift(...jobs);
     this.save();
     queueMicrotask(() => this.pump());
     return batch;
+  }
+  review(batchId) {
+    const batch = this.state.batches.find(b => b.id === batchId);
+    if (!batch) throw Error('视频批次不存在');
+    const first = this.state.jobs.find(j => j.id === batch.trialJobId);
+    return { batchId, required: !!batch.reviewFirst, approved: !!batch.reviewedAt, trialJobId: batch.trialJobId || '', ready: first?.status === 'complete' && !!first.outputs?.length, remaining: this.state.jobs.filter(j => j.batchId === batchId && j.status === 'review_pending').length };
+  }
+  approveReview(batchId) {
+    const state = this.review(batchId);
+    if (!state.required || state.approved) return state;
+    if (!state.ready) throw Error('请等待试片完成并预览后，再确认生成剩余视频');
+    for (const job of this.state.jobs) if (job.batchId === batchId && job.status === 'review_pending') { job.status = job.reviewResumeStatus || 'queued'; delete job.reviewResumeStatus; }
+    this.state.batches.find(b => b.id === batchId).reviewedAt = new Date().toISOString();
+    this.save(); queueMicrotask(() => this.pump()); return this.review(batchId);
   }
   pump() {
     if (!this.provider) return;
@@ -58,7 +76,7 @@ export class VideoQueue {
             if (duplicate) { const error = new Error('Qwen 返回了本批已使用的人物穿搭组合，正在重新生成'); error.transient = true; throw error; }
           }
           job.prompt = String(prompt).trim();
-          if (result && typeof result === 'object') { job.characters = result.characters || job.characters; job.promptSections = result.promptSections || job.promptSections; }
+          if (result && typeof result === 'object') { job.characters = result.characters || job.characters; job.promptSections = result.promptSections || job.promptSections; job.promptSource = result.promptSource || job.promptSource; }
           job.status = 'queued'; job.error = ''; job.nextAt = 0;
           this.save();
         })

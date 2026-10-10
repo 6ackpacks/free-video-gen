@@ -10,7 +10,7 @@ import { ReferenceLibrary } from './references.js';
 import { TrialManager, buildFixedMassagePrompt } from './trials.js';
 import { MediaStore } from './media.js';
 import { loadActionTemplates, templatesWithCompatibility } from './action-templates.js';
-import { compilePrompt, makeCharacters, selectTemplate } from './prompt-compiler.js';
+import { selectTemplate } from './prompt-compiler.js';
 import { ImageTransformManager } from './image-transforms.js';
 import { planPromptPairs, YIQU_TEMPLATE } from './paired-prompts.js';
 import { KeyframeBatchManager } from './keyframe-batches.js';
@@ -22,6 +22,7 @@ import { contentPackActionDirectory, getContentPack, listContentPacks } from './
 import { draftStoryPromptBatch, draftSelectedStoryPrompts, planStoryVideoJobs, validateStoryDuration, validateStoryRoute } from './story-prompts.js';
 
 import { WorkspaceState } from './workspace-state.js';
+import { actionPromptRules, promptInputs, rewriteMessages } from './prompt-guidance.js';
 import { StoryLibrary, STORY_STRATEGIES, STORY_TEMPLATES } from './story-library.js';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
@@ -47,8 +48,8 @@ const storyTasks = new DraftTasks(path.join(root, 'data', 'story-draft-tasks.jso
   if (input.generateVideo) {
     const route = provider.routes?.find(r => r.id === input.videoRoute);
     const jobs=planStoryVideoJobs({ ...input, items: result.items }, route);
-    if(route.id==='doubao')await provider.doubao.prepareBatch(jobs.length);
-    const batch = queue.enqueue(jobs);
+    if(route.id==='doubao')await provider.doubao.prepareBatch(1);
+    const batch = queue.enqueue(jobs, { reviewFirst: true });
     result.videoBatchId = batch.id;
   }
   return result;
@@ -121,6 +122,11 @@ const api = async (req, res, url) => {
     return reply(res, 200, [...images,...videos,...promptRecords].sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt))));
   }
   if (route === '/api/content-packs' && req.method === 'GET') return reply(res, 200, listContentPacks());
+  if (route === '/api/prompt-rewrites' && req.method === 'POST') {
+    const input = await body(req);
+    rewriteMessages(input);
+    return reply(res, 200, await provider.rewritePrompts(input));
+  }
   if (route === '/api/health' && req.method === 'GET') {
     if (!provider) return reply(res, 200, { connected: false, error: '尚未配置视频 API' });
     try { return reply(res, 200, { connected: true, provider: await provider.health?.() || provider.name }); }
@@ -161,7 +167,7 @@ const api = async (req, res, url) => {
     const subject = storyLibrary.get(subjectMatch[1]);
     if (storyTasks.tasks.some(t => t.status === 'running' && t.subjectId === subject.id)) throw Error('主体正在编写提示词，完成后再删除');
     const ids = (subject.assets || []).map(a => a.referenceId);
-    if (queue.state.jobs.some(j => j.referenceImageIds?.some(id => ids.includes(id)) && ['queued','submitting','waiting','running'].includes(j.status))) throw Error('主体图片正在被视频任务使用，完成后再删除');
+    if (queue.state.jobs.some(j => j.referenceImageIds?.some(id => ids.includes(id)) && ['review_pending','queued','submitting','waiting','running'].includes(j.status))) throw Error('主体图片正在被视频任务使用，完成后再删除');
     for (const id of ids) if (!storyLibrary.list().some(s => s.id !== subject.id && s.assets?.some(a => a.referenceId === id))) {
       try { references.get(id); } catch { continue; }
       references.remove(id);
@@ -180,7 +186,7 @@ const api = async (req, res, url) => {
     const subject = storyLibrary.get(storyAssetMatch[1]), referenceId = storyAssetMatch[2];
     if (!(subject.assets || []).some(a => a.referenceId === referenceId)) throw Error('主体参考图不存在');
     if (storyTasks.tasks.some(t => t.status === 'running' && t.referenceImageIds?.includes(referenceId))) throw Error('图片正在被提示词任务使用，完成后再删除');
-    if (queue.state.jobs.some(j => j.referenceImageIds?.includes(referenceId) && ['queued','submitting','waiting','running'].includes(j.status))) throw Error('图片正在被视频任务使用，完成后再删除');
+    if (queue.state.jobs.some(j => j.referenceImageIds?.includes(referenceId) && ['review_pending','queued','submitting','waiting','running'].includes(j.status))) throw Error('图片正在被视频任务使用，完成后再删除');
     const shared = storyLibrary.list().some(s => s.id !== subject.id && s.assets?.some(a => a.referenceId === referenceId));
     if (!shared) references.remove(referenceId);
     return reply(res, 200, storyLibrary.save({ name: subject.name, materials: subject.materials, assets: subject.assets.filter(a => a.referenceId !== referenceId) }, subject.id));
@@ -206,8 +212,8 @@ const api = async (req, res, url) => {
     if (!routeInfo) throw new Error('视频模型路由不存在');
     for (const item of input.items || []) for (const id of item.referenceImageIds || []) references.get(id);
     const planned = planStoryVideoJobs(input, routeInfo);
-    if(routeInfo.id==='doubao')await provider.doubao.prepareBatch(planned.length);
-    return reply(res, 201, queue.enqueue(planned));
+    if(routeInfo.id==='doubao')await provider.doubao.prepareBatch(1);
+    return reply(res, 201, queue.enqueue(planned, { reviewFirst: true }));
   }
   if (route === '/api/keyframe-batches' && req.method === 'GET') return reply(res, 200, keyframeBatches.list());
   if (route === '/api/keyframe-batches' && req.method === 'POST') return reply(res, 201, keyframeBatches.create(await body(req)));
@@ -224,7 +230,7 @@ const api = async (req, res, url) => {
     if (!routeInfo) throw new Error('视频模型路由不存在');
     if (requestedRoute === 'doubao') { const info = await provider.doubao.info(); if (!info.ready) throw new Error(info.message); }
     if (requestedRoute !== 'doubao' && !routeInfo.configured) throw new Error(`${routeInfo.name} 尚未配置`);
-    if (requestedRoute === 'doubao') await provider.doubao.prepareBatch(Array.isArray(input.itemIds) ? input.itemIds.length : 1);
+    if (requestedRoute === 'doubao') await provider.doubao.prepareBatch(1);
     return reply(res, 201, await keyframeBatches.confirm(confirmKeyframeMatch[1], input));
   }
   const skillMatch = /^\/api\/skills\/([a-f0-9-]{36})$/i.exec(route);
@@ -244,6 +250,8 @@ const api = async (req, res, url) => {
   }
   if (route === '/api/references' && req.method === 'GET') return reply(res, 200, references.list(url.searchParams.get('scope') || ''));
   if (route === '/api/references' && req.method === 'POST') return reply(res, 201, references.add(await body(req, 29_000_000)));
+  const backgroundMatch = /^\/api\/references\/([a-f0-9-]{36})\/background$/i.exec(route);
+  if (backgroundMatch && req.method === 'POST') return reply(res, 200, references.useAsBackground(backgroundMatch[1]));
   const referenceMatch = /^\/api\/references\/([a-f0-9-]{36})$/i.exec(route);
   if (referenceMatch && req.method === 'DELETE') return reply(res, 200, { deleted: references.remove(referenceMatch[1]) });
   if (route === '/api/image-transforms' && req.method === 'GET') return reply(res, 200, imageTransforms.list());
@@ -257,24 +265,22 @@ const api = async (req, res, url) => {
     const input = await body(req);
     return reply(res, 200, await references.analyze(analyzeMatch[1], input.sceneProfile || null));
   }
-  const previewMatch = /^\/api\/references\/([a-f0-9-]{36})\/prompt-preview$/i.exec(route);
+  const previewMatch = /^\/api\/references\/([a-f0-9-]{36})\/(prompt-preview|prompt-draft)$/i.exec(route);
   if (previewMatch && req.method === 'POST') {
-    const input = await body(req);
-    const pack = getContentPack(String(input.packId || 'foot-spa-store'));
-    if (pack.engine !== 'background-variants') throw new Error('当前内容模板没有固定底图动作库');
-    const reference = references.get(previewMatch[1]);
-    if (!reference.sceneProfile) throw new Error('请先完成底图场景分析');
-    const templates = templatesWithCompatibility(reference.sceneProfile, contentPackActionDirectory(pack), { expectedCount: pack.expectedActionCount });
-    const template = selectTemplate({ templates, actionId: input.actionId, mode: input.actionMode });
-    const characters = makeCharacters(template, Number(input.variantIndex) || 1, input.outfitPreferences || {});
-    return reply(res, 200, compilePrompt({ referenceId: reference.id, sceneProfile: reference.sceneProfile, template, characters, duration: Math.max(2, Math.min(30, Number(input.duration) || 5)), aspectRatio: '9:16', userPrompt: String(input.userPrompt || '').slice(0, 3000) }));
+    const input=await body(req),reference=references.get(previewMatch[1]),pack=getContentPack(input.packId||'foot-spa-store');
+    if(!reference.sceneProfile)throw Error('请先完成底图场景分析');
+    const templates=templatesWithCompatibility(reference.sceneProfile,contentPackActionDirectory(pack),{expectedCount:pack.expectedActionCount});
+    const template=selectTemplate({templates,actionId:input.actionId,mode:input.actionMode});
+    const job={referenceId:reference.id,sceneProfile:reference.sceneProfile,actionTemplate:template,duration:Math.max(2,Math.min(30,Number(input.duration)||5)),ratio:'9:16',outfitPreferences:input.outfitPreferences||{},userPrompt:String(input.userPrompt||'').slice(0,3000),draftAnchor:String(input.originalText||'').slice(0,14000),...promptInputs(input)};
+    if(previewMatch[2]==='prompt-preview')return reply(res,200,{sections:actionPromptRules(job),source:'template-rules'});
+    return reply(res,200,await provider.draft(job));
   }
   const imageMatch = /^\/api\/references\/([a-f0-9-]{36})\/image$/i.exec(route);
   if (imageMatch && req.method === 'GET') {
     const { item, filename } = references.fileFor(imageMatch[1]);
     return reply(res, 200, fs.readFileSync(filename), item.mime);
   }
-  if (route === '/api/trials' && req.method === 'GET') return reply(res, 200, trials.list());
+  if (route === '/api/trials' && req.method === 'GET') return reply(res, 200, trials.list(url.searchParams.has('summary')));
   if (route === '/api/trials' && req.method === 'POST') {
     const input = await body(req);
     const requestedRoute = input.videoRoute || (input.generationMethod === 'doubao' ? 'doubao' : 'apimart');
@@ -308,6 +314,13 @@ const api = async (req, res, url) => {
     return reply(res, 201, queue.enqueue(planned));
   }
   if (route === '/api/batches' && req.method === 'GET') return reply(res, 200, queue.snapshot().batches);
+  const batchReviewMatch = /^\/api\/batches\/([a-f0-9-]{36})\/review$/i.exec(route);
+  if (batchReviewMatch && req.method === 'GET') return reply(res, 200, queue.review(batchReviewMatch[1]));
+  if (batchReviewMatch && req.method === 'POST') {
+    const review = queue.review(batchReviewMatch[1]);
+    if(review.required&&!review.approved&&review.ready){const first=queue.state.jobs.find(j=>j.id===review.trialJobId);if(first?.videoRoute==='doubao')await provider.doubao.prepareBatch(review.remaining);}
+    return reply(res, 200, queue.approveReview(batchReviewMatch[1]));
+  }
   const batchDownloadMatch = /^\/api\/batches\/([a-f0-9-]{36})\/download$/i.exec(route);
   if (batchDownloadMatch && req.method === 'GET') {
     const jobs = batchJobs(batchDownloadMatch[1]);
@@ -335,6 +348,13 @@ const api = async (req, res, url) => {
   }
   const retryJobMatch = /^\/api\/jobs\/([a-f0-9-]{36})\/retry$/i.exec(route);
   if (retryJobMatch && req.method === 'POST') return reply(res, 202, queue.retry(retryJobMatch[1]));
+  const cacheMatch = /^\/api\/video\/([a-f0-9-]{36})\/cache$/i.exec(route);
+  if (cacheMatch && ['GET', 'POST'].includes(req.method)) {
+    const job = queue.state.jobs.find(item => item.id === cacheMatch[1]);
+    if (!job) return reply(res, 404, { error: '视频任务不存在' });
+    if (job.status !== 'complete' || !job.outputs?.length) return reply(res, 409, { error: '视频尚未完成，请等待生成结束' });
+    return reply(res, 200, req.method === 'POST' ? media.prepare(job) : media.cacheStatus(job));
+  }
   const videoMatch = /^\/api\/video\/([a-f0-9-]{36})$/i.exec(route);
   if (videoMatch && req.method === 'GET') {
     const job = queue.state.jobs.find(item => item.id === videoMatch[1]);
@@ -349,7 +369,7 @@ http.createServer(async (req, res) => {
     if (!['GET', 'HEAD'].includes(req.method) && req.headers.origin && req.headers.origin !== `http://127.0.0.1:${port}`) return reply(res, 403, { error: '仅允许从本地工作台提交请求' });
     const url = new URL(req.url, `http://127.0.0.1:${port}`);
     if (url.pathname.startsWith('/api/')) return await api(req, res, url);
-    if (req.method === 'GET' && ['/workbench-ui.css', '/workbench-ui.js', '/replica-ui.css', '/replica-ui.js', '/subtitle-ui.js'].includes(url.pathname)) return reply(res, 200, fs.readFileSync(path.join(root, url.pathname.slice(1))), url.pathname.endsWith('.css') ? 'text/css; charset=utf-8' : 'text/javascript; charset=utf-8');
+    if (req.method === 'GET' && ['/workbench-ui.css', '/workbench-ui.js', '/replica-ui.css', '/replica-ui.js', '/subtitle-ui.js', '/video-preview.js', '/image-warehouse.js', '/prompt-inputs.js'].includes(url.pathname)) return reply(res, 200, fs.readFileSync(path.join(root, url.pathname.slice(1))), url.pathname.endsWith('.css') ? 'text/css; charset=utf-8' : 'text/javascript; charset=utf-8');
     if (req.method === 'GET' && url.pathname === '/legacy' && url.searchParams.get('tab') === 'accounts') return reply(res, 200, fs.readFileSync(path.join(root, 'index.html')), 'text/html; charset=utf-8');
     if (req.method === 'GET' && url.pathname === '/legacy') { res.writeHead(302, { Location: '/?mode=store', 'Cache-Control': 'no-store' }); return res.end(); }
     if(req.method==='GET'&&['/clone','/presets'].includes(url.pathname))return reply(res,200,fs.readFileSync(path.join(root,'replica-studio.html')),'text/html; charset=utf-8');

@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { templatesWithCompatibility } from './action-templates.js';
 import { selectTemplate } from './prompt-compiler.js';
 import { contentPackActionDirectory, getContentPack } from './content-packs.js';
+import { actionContextKey, parseActionDraft, promptInputs } from './prompt-guidance.js';
 
 const fixedMassageVariants = [
   '双手轻柔交替揉按顾客足弓，动作小幅连续',
@@ -36,7 +37,8 @@ export class TrialManager {
     fs.renameSync(this.file + '.tmp', this.file);
   }
   view(item) {
-    const trialJob = this.queue.state.jobs.find(job => job.batchId === item.trialBatchId);
+    const rawTrialJob = this.queue.state.jobs.find(job => job.batchId === item.trialBatchId);
+    const trialJob = rawTrialJob ? Object.fromEntries(Object.entries(rawTrialJob).filter(([key]) => key !== 'referenceImageUrl')) : null;
     const bulk = item.bulkBatchId ? this.queue.state.jobs.filter(job => job.batchId === item.bulkBatchId) : [];
     const jobs = [trialJob, ...bulk].filter(Boolean).sort((a, b) => a.index - b.index).map(job => ({
       id: job.id, index: job.index, status: job.status, outputs: job.outputs, error: job.error || '',
@@ -53,7 +55,13 @@ export class TrialManager {
       bulk: { total: bulk.length, complete: bulk.filter(x => x.status === 'complete').length, errors: bulk.filter(x => ['error', 'needs_review'].includes(x.status)).length }
     };
   }
-  list() { return this.items.slice(0, 50).map(item => this.view(item)); }
+  list(summary = false) {
+    return this.items.map(item => {
+      if (!summary) return this.view(item);
+      const jobs = this.queue.state.jobs.filter(job => job.batchId === item.trialBatchId || job.batchId === item.bulkBatchId);
+      return { id: item.id, createdAt: item.createdAt, packId: item.packId || 'foot-spa-store', actionName: item.actionName, skillName: item.skillName, actionId: item.actionId, actionMode: item.actionMode, count: item.count, bulkBatchId: item.bulkBatchId, complete: jobs.filter(j => j.status === 'complete').length, errors: jobs.filter(j => ['error','needs_review'].includes(j.status)).length, generated: jobs.length };
+    });
+  }
   get(id) {
     const item = this.items.find(x => x.id === id);
     if (!item) throw new Error('试片记录不存在');
@@ -82,14 +90,20 @@ export class TrialManager {
     const recentActionIds = this.items.filter(item => (item.packId || 'foot-spa-store') === pack.id).slice(0, 20).map(x => x.actionId).filter(Boolean);
     const planned = [];
     for (let i = 1; i <= count; i++) {
-      const template = selectTemplate({ templates, actionId: input.actionId, mode: actionMode, recentActionIds: [...recentActionIds, ...planned.map(x => x.actionId)] });
+      const template = selectTemplate({ templates, actionId: i === 1 && input.preparedPrompt ? input.preparedPrompt.actionId : input.actionId, mode: i === 1 && input.preparedPrompt ? 'manual' : actionMode, recentActionIds: [...recentActionIds, ...planned.map(x => x.actionId)] });
       planned.push({
         id: randomUUID(), index: i, packId: pack.id, skillId: `${pack.id}-locked-actions`, skillName: template.name,
-        prompt: '', promptSections: null, lockedPrompt: false, lockedActionTemplate: template,
+        prompt: '', promptSections: null, lockedPrompt: false, actionTemplate: template, promptMode: 'template-skill-v1', ...promptInputs(input),
         actionId: template.id, actionName: template.name, endState: template.endState,
         sceneProfile: reference.sceneProfile, characters: [], outfitPreferences: input.outfitPreferences || {}, description, userPrompt: description,
         referenceId, generationMethod, videoRoute, videoModel, duration, resolution, ratio, seed: Math.floor(Math.random() * 2147483647)
       });
+    }
+    if (input.preparedPrompt) {
+      if (actionContextKey(planned[0]) !== input.preparedPrompt.contextKey) throw Error('模板、底图或创作要求已变化，请重新生成提示词');
+      const prepared = parseActionDraft(JSON.stringify(input.preparedPrompt), planned[0]);
+      Object.assign(planned[0], { prompt: prepared.prompt, characters: prepared.characters, promptSections: prepared.promptSections, lockedPrompt: true, promptSource: prepared.promptSource });
+      for (const job of planned.slice(1)) if (job.actionId === planned[0].actionId) job.draftAnchor = prepared.prompt;
     }
     const referenceImageUrl = videoRoute.startsWith('wan-') ? this.references.source(referenceId, 'data-url') : (videoRoute === 'apimart' ? await this.references.ensure(referenceId) : '');
     for (const job of planned) { job.referenceId = referenceId; job.referenceImageUrl = referenceImageUrl; job.generationMethod = generationMethod; }
@@ -98,6 +112,7 @@ export class TrialManager {
       id: randomUUID(), createdAt: new Date().toISOString(), packId: pack.id, skillId: `${pack.id}-locked-actions`, skillName: planned[0].skillName,
       count, description, userPrompt: description, referenceId, generationMethod, videoRoute, videoModel, duration, resolution, ratio, actionMode, actionId: planned[0].actionId,
       actionName: planned[0].actionName, sceneProfile: reference.sceneProfile,
+      ...promptInputs(input),
       trialBatchId: batch.id, bulkBatchId: '', remaining: planned.slice(1)
     };
     this.items.unshift(item); this.save();

@@ -43,6 +43,7 @@ export async function loadProvider() {
     supportsIdempotency: false, custom, apimart, doubao,
     setReferences(value) { referenceLibrary = value; doubao.setReferences(value); },
     draft(job) { if (!apimart?.draft) throw new Error('Qwen 提示词 API 尚未配置'); return apimart.draft(job); },
+    rewritePrompts(input) { if(custom?.rewritePrompts)return custom.rewritePrompts(input);if(apimart?.rewritePrompts)return apimart.rewritePrompts(input);throw Error('提示词大模型尚未配置'); },
     draftKeyframePrompts(...args) { if (custom?.draftKeyframePrompts) return custom.draftKeyframePrompts(...args); if (apimart?.draftKeyframePrompts) return apimart.draftKeyframePrompts(...args); throw new Error('提示词大模型尚未配置'); },
     draftStoryPrompts(...args) { if (custom?.draftStoryPrompts) return custom.draftStoryPrompts(...args); if (apimart?.draftStoryPrompts) return apimart.draftStoryPrompts(...args); throw new Error('短剧提示词大模型尚未配置'); },
     analyzeReplica(input) { if(custom?.analyzeReplica)return custom.analyzeReplica(input);if(apimart?.analyzeReplica)return apimart.analyzeReplica(input);throw Error('尚未配置视频分析模型'); },
