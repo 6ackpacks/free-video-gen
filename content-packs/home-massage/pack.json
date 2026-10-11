@@ -8,10 +8,60 @@
   "status": "active",
   "description": "多张人物与场景参考图，每张生成一个不同视频。",
   "scenes": [
-    { "id": "home-sofa", "name": "家庭沙发", "requiredEvidence": ["home", "sofa"] },
-    { "id": "home-bed", "name": "家庭床边", "requiredEvidence": ["home", "bed"] }
+    {
+      "id": "home-sofa",
+      "name": "家庭沙发",
+      "requiredEvidence": [
+        "home",
+        "sofa"
+      ]
+    },
+    {
+      "id": "home-bed",
+      "name": "家庭床边",
+      "requiredEvidence": [
+        "home",
+        "bed"
+      ]
+    }
   ],
   "actions": [
+    {
+      "id": "shoulder-relax",
+      "name": "肩颈放松",
+      "actionText": "一位成年顾客坐在沙发上，另一位成年服务人员在其身后轻柔按摩肩颈，双手保持自然接触，起始姿态和接触部位清晰。",
+      "continuityPolicy": "specified-action-throughout"
+    },
+    {
+      "id": "arm-relax",
+      "name": "手臂放松",
+      "actionText": "成年顾客坐在沙发上，将前臂自然放在软垫上，成年服务人员从侧面轻柔按摩前臂，保留双方位置。",
+      "continuityPolicy": "specified-action-throughout"
+    },
+    {
+      "id": "back-relax",
+      "name": "背部放松",
+      "actionText": "成年顾客俯卧在护理床上，成年服务人员站在侧面，以自然的连续手法轻柔按摩上背，保留正确起始姿态与接触位置。",
+      "continuityPolicy": "specified-action-throughout"
+    },
+    {
+      "id": "foot-care",
+      "name": "足部护理",
+      "actionText": "成年顾客坐在沙发上，一只脚置于软垫，成年服务人员坐于前方轻柔按摩足部，保留正确接触。",
+      "continuityPolicy": "specified-action-throughout"
+    },
+    {
+      "id": "home-care",
+      "name": "居家护理",
+      "actionText": "两名成年人在温馨客厅，一人坐在沙发上，另一人在侧后方轻柔按摩肩部，动作舒缓，姿态自然。",
+      "continuityPolicy": "specified-action-throughout"
+    },
+    {
+      "id": "service-intro",
+      "name": "服务介绍",
+      "actionText": "成年服务人员站在护理空间中，自然展示护理环境与按摩用品，以简短的手势介绍服务，不虚构医疗承诺。",
+      "continuityPolicy": "specified-action-throughout"
+    },
     {
       "id": "foot-massage-continuous",
       "name": "连续足部按摩",
@@ -25,7 +75,11 @@
   ],
   "policies": {
     "referenceRole": "visual-reference-not-first-frame",
-    "humanReview": ["prompt-batch", "image-batch", "video-direction"],
+    "humanReview": [
+      "prompt-batch",
+      "image-batch",
+      "video-direction"
+    ],
     "audio": "elegant-ambiguous-instrumental"
   }
 }

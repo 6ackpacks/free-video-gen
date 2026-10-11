@@ -444,7 +444,8 @@ http.createServer(async (req, res) => {
     if (!['GET', 'HEAD'].includes(req.method) && req.headers.origin && req.headers.origin !== `http://127.0.0.1:${port}`) return reply(res, 403, { error: '仅允许从本地工作台提交请求' });
     const url = new URL(req.url, `http://127.0.0.1:${port}`);
     if (url.pathname.startsWith('/api/')) return await api(req, res, url);
-    if(req.method==='GET'&&['/studio-ui.js','/studio-ui.css'].includes(url.pathname))return reply(res,200,fs.readFileSync(path.join(root,url.pathname.slice(1))),url.pathname.endsWith('.css')?'text/css; charset=utf-8':'text/javascript; charset=utf-8');
+    if(req.method==='GET'&&/^\/design-assets\/[a-z0-9-]+\.webp$/.test(url.pathname)){const file=path.join(root,url.pathname.slice(1));if(fs.existsSync(file))return reply(res,200,fs.readFileSync(file),'image/webp');}
+    if(req.method==='GET'&&['/studio-ui.js','/studio-ui.css','/replica-design.js','/replica-design.css'].includes(url.pathname))return reply(res,200,fs.readFileSync(path.join(root,url.pathname.slice(1))),url.pathname.endsWith('.css')?'text/css; charset=utf-8':'text/javascript; charset=utf-8');
     if(req.method==='GET'&&['/studio','/templates','/works','/assets','/accounts','/settings'].includes(url.pathname))return reply(res,200,fs.readFileSync(path.join(root,'studio.html')),'text/html; charset=utf-8');
     if(req.method==='GET'&&url.pathname==='/replicate')return reply(res,200,fs.readFileSync(path.join(root,'replica-studio.html')),'text/html; charset=utf-8');
     if(req.method==='GET'&&url.pathname==='/'&&!url.searchParams.has('mode')){res.writeHead(302,{Location:'/studio'});return res.end();}

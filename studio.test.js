@@ -95,3 +95,9 @@ test('A12 只试所选画面，其他模板未准备不会阻止这一条试片'
   const {domain}=fixture(t),p=domain.saveProject({scene:'footspa',plans:[plan('a'),{...plan('b',3),imageIds:[]} ]});p.plans[0].prompts=['prompt'];const queue={state:{jobs:[],batches:[]},enqueue(jobs){const batch={id:'trial-batch',count:jobs.length};this.state.jobs.push(...jobs);this.state.batches.push(batch);return batch;}};
   const service=Object.assign(Object.create(StudioService.prototype),{domain,queue,references:refs,provider:{routes:[route]}});assert.equal(service.submit({projectId:p.id,planId:p.plans[0].id,index:0,trial:true,requestId:'one'}).count,1);
 });
+test('底图准备页刷新恢复来源配置、共用底图及当前模板，保持已确认脚本与模板版本',t=>{
+ const {dir,domain}=fixture(t);const input={scene:'footspa',stage:'images',imagePlanId:'prepare-a',commonImageId:'image',defaultMapping:'common',plans:[{...plan('a',5),id:'prepare-a',imageConfig:{scene:'门店走廊',people:'两位成年人',pose:'站在房门前',brief:'暖光'}}]};
+ const p=domain.saveProject(input),restored=new StudioDomain(path.join(dir,'data','studio.json')).project(p.id);
+ assert.equal(restored.stage,'images');assert.equal(restored.imagePlanId,'prepare-a');assert.equal(restored.commonImageId,'image');assert.equal(restored.defaultMapping,'common');assert.equal(restored.plans[0].imageConfig.pose,'站在房门前');assert.equal(restored.plans[0].count,5);assert.equal(restored.plans[0].snapshot.version,1);
+ restored.plans[0].prompts=Array(5).fill('已确认内容');restored.plans[0].promptsDirty=false;domain.saveProject({...restored,stage:'templates'});assert.equal(domain.project(p.id).plans[0].promptsDirty,false);
+});

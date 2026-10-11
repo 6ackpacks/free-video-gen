@@ -61,7 +61,7 @@ export class StudioDomain {
         if(plan.snapshot?.actionPack!==undefined)template.actionPack=actionPackSnapshot(plan.snapshot.actionPack);
         if(plan.snapshot?.replica&&template.replica)template.replica=normalizeReplica(plan.snapshot.replica);
         const count=Number(plan.count),mapping=plan.mapping||template.mapping||'common';
-        const clean={id:plan.id||randomUUID(),templateId:template.id,snapshot:template,count,duration:Number(plan.duration)||template.duration,videoRoute:plan.videoRoute||'doubao',resolution:plan.resolution||'',mapping,imageIds:plan.imageIds||[],rows:plan.rows||[],shotImages:plan.shotImages||[],creativeBrief:String(plan.creativeBrief||'').slice(0,3000),content:String(plan.content||'').slice(0,16000),prompts:previous?.prompts||[],scriptConfirmed:!!plan.scriptConfirmed};
+        const clean={id:plan.id||randomUUID(),templateId:template.id,snapshot:template,count,duration:Number(plan.duration)||template.duration,videoRoute:plan.videoRoute||'doubao',resolution:plan.resolution||'',mapping,imageIds:plan.imageIds||[],rows:plan.rows||[],shotImages:plan.shotImages||[],creativeBrief:String(plan.creativeBrief||'').slice(0,3000),imageConfig:Object.fromEntries(['scene','people','pose','brief'].map(k=>[k,String(plan.imageConfig?.[k]??previous?.imageConfig?.[k]??'').slice(0,2000)])),content:String(plan.content||'').slice(0,16000),prompts:previous?.prompts||[],scriptConfirmed:!!plan.scriptConfirmed};
         slotsFor(clean);
         const signature=fingerprint({...clean,prompts:undefined,scriptConfirmed:undefined});
         clean.prompts=clean.prompts.slice(0,count);
@@ -71,7 +71,7 @@ export class StudioDomain {
       });
       p.plans=plans;
     }
-    Object.assign(p,{name:String(input.name||p.name||'未命名项目').slice(0,100),scene:input.scene||p.scene||'',stage:['templates','prompts'].includes(input.stage)?input.stage:p.stage||'templates',brandName:String(input.brandName??p.brandName??'').slice(0,80),brandFacts:String(input.brandFacts??p.brandFacts??'').slice(0,30000),updatedAt:stamp()});
+    Object.assign(p,{name:String(input.name||p.name||'未命名项目').slice(0,100),scene:input.scene||p.scene||'',imagePlanId:input.imagePlanId??p.imagePlanId??'',commonImageId:input.commonImageId??p.commonImageId??'',defaultMapping:['common','one-to-one','custom','shots'].includes(input.defaultMapping)?input.defaultMapping:p.defaultMapping,stage:['templates','prompts','images'].includes(input.stage)?input.stage:p.stage||'templates',brandName:String(input.brandName??p.brandName??'').slice(0,80),brandFacts:String(input.brandFacts??p.brandFacts??'').slice(0,30000),updatedAt:stamp()});
     if(!this.state.projects.includes(p))this.state.projects.unshift(p);
     this.save();return p;
   }
