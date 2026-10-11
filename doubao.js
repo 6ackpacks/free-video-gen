@@ -55,12 +55,12 @@ export class DoubaoBridge {
     try {
       const session = await this.discover();
       const [accounts, settings] = await Promise.all([this.request('/api/accounts'), this.request('/api/settings')]);
-      const usable = accounts.filter(item => item.enabled && item.status === 'active');
+      const usable = accounts.filter(item => item.enabled && item.status === 'active' && !(item.video_quota_total != null && Number(item.video_quota_used) >= Number(item.video_quota_total)) && !(item.video_limited_until && Date.parse(item.video_limited_until)>Date.now()));
       return {
         connected: true, origin: session.origin, accounts: usable.length, accountItems: accounts,
         model: this.model, ready: usable.length > 0, maxConcurrency: Number(settings.max_concurrency) || 1,
         dailyQuota: Number(settings.daily_quota) || 5,
-        message: usable.length ? `${usable.length} 个可用账号 · 并发 ${Number(settings.max_concurrency) || 1}` : '管理器已连接，请先扫码登录豆包账号'
+        message: usable.length ? `${usable.length} 个可用账号 · 并发 ${Number(settings.max_concurrency) || 1}` : '没有可用账号，请检查登录状态、暂停和服务额度'
       };
     } catch (error) { return { connected: false, accounts: 0, ready: false, model: this.model, message: error.message }; }
   }
@@ -82,7 +82,7 @@ export class DoubaoBridge {
   }
   async submit(job) {
     const info = await this.info();
-    if (!info.ready) throw new Error(info.message);
+    if (!info.ready) { const error=new Error(info.message); error.waitForAccount=true; throw error; }
     const images = [];
     const referenceIds=[...new Set([...(Array.isArray(job.referenceImageIds)?job.referenceImageIds:[]),...(job.referenceId?[job.referenceId]:[])])];
     if(referenceIds.length>9)throw new Error('豆包图生视频最多支持 9 张参考图');

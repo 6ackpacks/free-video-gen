@@ -5,6 +5,7 @@
   "type": "module",
   "main": "electron/main.js",
   "scripts": {
+    "build": "node scripts/check-build.mjs",
     "start": "node --env-file=project.env server.js",
     "start:proxy": "node --use-env-proxy --env-file=project.env server.js",
     "desktop": "electron .",

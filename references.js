@@ -59,6 +59,7 @@ export class ReferenceLibrary {
     this.items.unshift(item); this.save(); return this.public(item);
   }
   remove(id) {
+    if(this.isReferenced?.(id))throw Error('该素材被项目或历史作品引用，请在我的素材中归档');
     const index = this.items.findIndex(item => item.id === id);
     if (index < 0) throw new Error('参考图不存在');
     if (this.inFlight.has(id) || this.analyses.has(id)) throw new Error('图片正在上传或分析，请稍后再删除');

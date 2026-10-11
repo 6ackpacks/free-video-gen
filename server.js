@@ -1,3 +1,4 @@
+import {planReplicaSubmission} from './replica-adoption.js';
 import { ReplicaSources, normalizeReplica, replicaPrompts } from './replica-workflow.js';
 import http from 'node:http';
 import fs from 'node:fs';
@@ -28,6 +29,9 @@ import { draftStoryPromptBatch, draftSelectedStoryPrompts, planStoryVideoJobs, v
 import { WorkspaceState } from './workspace-state.js';
 import { actionPromptRules, promptInputs, rewriteMessages } from './prompt-guidance.js';
 import { StoryLibrary, STORY_STRATEGIES, STORY_TEMPLATES } from './story-library.js';
+import {StudioService} from './studio-service.js';
+import {studioApi} from './studio-api.js';
+import {loadStudioConnections,publicConnections,saveStudioConnections} from './studio-connections.js';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const port = Number(process.env.PORT || 4173);
@@ -37,7 +41,9 @@ try {
 } catch (error) {
   console.warn(`[豆包] 内置服务暂不可用：${error.message}`);
 }
+loadStudioConnections(root);
 const provider = await loadProvider();
+const prepareDoubao=async count=>{try{return await provider.doubao.prepareBatch(count);}catch{return {queued:true};}};
 const draftTasks = new DraftTasks(path.join(root, 'data', 'prompt-draft-tasks.json'), input => draftKeyframePromptBatch(input, provider));
 const queue = new VideoQueue(path.join(root, 'data', 'queue.json'), provider, {
   maxSubmits: process.env.VIDEO_MAX_SUBMITS,
@@ -52,7 +58,7 @@ const storyTasks = new DraftTasks(path.join(root, 'data', 'story-draft-tasks.jso
   if (input.generateVideo) {
     const route = provider.routes?.find(r => r.id === input.videoRoute);
     const jobs=planStoryVideoJobs({ ...input, items: result.items }, route);
-    if(route.id==='doubao')await provider.doubao.prepareBatch(1);
+    if(route.id==='doubao')await prepareDoubao(1);
     const batch = queue.enqueue(jobs, { reviewFirst: true });
     result.videoBatchId = batch.id;
   }
@@ -72,6 +78,8 @@ const media = new MediaStore(path.join(root, 'data', 'videos'),{resolveOutputs:a
   return result.outputs;
 }});
 const presentation = new VideoPresentation(path.join(root,'data','video-presentation'));
+const studio = new StudioService({root,provider,queue,references,workspace:workspaceState,storyLibrary,replicaSources,presentation,media});
+references.isReferenced=id=>queue.state.jobs.some(j=>j.referenceId===id||j.referenceImageIds?.includes(id))||studio.domain.state.projects.some(p=>p.plans.some(plan=>plan.imageIds.includes(id)||plan.rows.some(r=>r.imageId===id)||plan.shotImages.some(ids=>ids.includes(id))));
 const subtitles = new SubtitleRenderer(path.join(root,'data','subtitle-renders'),media);
 const imageTransforms = new ImageTransformManager(path.join(root, 'data'), provider, references);
 const keyframeBatches = new KeyframeBatchManager(path.join(root, 'data', 'keyframe-batches.json'), provider, references, queue, {
@@ -97,6 +105,12 @@ const body = async (req, max = 2_000_000) => {
 };
 const api = async (req, res, url) => {
   const route = url.pathname;
+  if(route==='/api/studio/connections'&&req.method==='GET')return reply(res,200,publicConnections());
+  if(route==='/api/studio/connections'&&req.method==='POST'){
+    const result=saveStudioConnections(root,await body(req));
+    const replacement=await loadProvider();replacement.setReferences(references);Object.assign(provider,replacement);return reply(res,200,result);
+  }
+  if(await studioApi(studio,req,res,url,{body,reply}))return;
   if(route==='/api/action-packs'&&req.method==='GET')return reply(res,200,workspaceState.state.actionPacks||[]);
   if(route==='/api/action-packs'&&req.method==='POST')return reply(res,201,workspaceState.saveActionPack(await body(req)));
   if(route==='/api/replica-templates'&&req.method==='POST'){const input=await body(req);if(!String(input.direction||'').trim())throw Error('请写下模板想法');return reply(res,202,replicaTasks.create({name:String(input.name||'新模板').slice(0,80),direction:String(input.direction).slice(0,3000),baseTemplate:input.replica?normalizeReplica(input.replica):undefined}));}
@@ -112,7 +126,7 @@ const api = async (req, res, url) => {
   if(route==='/api/replica-sources'&&req.method==='GET')return reply(res,200,replicaSources.sources);
   if(route==='/api/replica-sources'&&req.method==='POST')return reply(res,201,replicaSources.add(await body(req,4000000)));
   const sourceMatch=/^\/api\/replica-sources\/([a-f0-9-]{36})$/.exec(route);
-  if(sourceMatch&&req.method==='DELETE'){if(replicaTasks.tasks.some(t=>t.sourceId===sourceMatch[1]&&t.status==='running'))throw Error('该参考正在分析，请完成后再删除');return reply(res,200,replicaSources.remove(sourceMatch[1]))}
+  if(sourceMatch&&req.method==='DELETE'){if(studio.domain.state.templates.some(t=>t.originSourceId===sourceMatch[1]))throw Error('该参考被模板引用，请在我的素材中归档');if(replicaTasks.tasks.some(t=>t.sourceId===sourceMatch[1]&&t.status==='running'))throw Error('该参考正在分析，请完成后再删除');return reply(res,200,replicaSources.remove(sourceMatch[1]))}
   const replicaFrame=/^\/api\/replica-sources\/([a-f0-9-]{36})\/frames\/(\d+)$/.exec(route);
   if(replicaFrame&&req.method==='GET')return reply(res,200,replicaSources.frame(replicaFrame[1],Number(replicaFrame[2])),'image/jpeg');
   if(route==='/api/replica-analysis'&&req.method==='POST'){const input=await body(req);replicaSources.get(input.sourceId);input.direction=String(input.direction||'').slice(0,3000);input.audioNotes=String(input.audioNotes||'').slice(0,2000);const task=replicaTasks.create(input);task.sourceId=input.sourceId;replicaTasks.save();return reply(res,202,task)}
@@ -122,7 +136,13 @@ const api = async (req, res, url) => {
   }
   const replicaTask=/^\/api\/replica-analysis\/([a-f0-9-]{36})$/.exec(route);
   if(replicaTask&&req.method==='GET')return reply(res,200,replicaTasks.get(replicaTask[1]));
-  if(route==='/api/replica-presets'&&req.method==='POST')return reply(res,201,workspaceState.saveReplica(await body(req)));
+  if(route==='/api/replica-presets'&&req.method==='POST'){
+    const input=await body(req),saved=workspaceState.saveReplica(input);
+    const existing=studio.domain.state.templates.find(t=>t.id===saved.id||t.legacyPresetId===saved.id);
+    const template=studio.domain.saveTemplate({id:existing?.id,importId:existing?undefined:saved.id,name:saved.name,scene:input.scene||existing?.scene||'',description:input.description||saved.replica.template,replica:saved.replica,source:saved.sourceId?'replica':'my',originSourceId:saved.sourceId||'',actions:saved.replica.beats.map(b=>b.action),actionPack:(workspaceState.state.actionPacks||[]).find(a=>a.id===saved.settings?.actionPackId)||null,duration:saved.settings?.duration||5,mapping:'common'});
+    if(!existing){template.legacyPresetId=saved.id;studio.domain.save();}
+    return reply(res,201,saved);
+  }
   if(['/api/replica-preview','/api/replica-batches'].includes(route)&&req.method==='POST'){
     const input=await body(req),routeInfo=provider.routes.find(r=>r.id===input.videoRoute);
     if(input.actionPackId){input.actionPack=(workspaceState.state.actionPacks||[]).find(p=>p.id===input.actionPackId);if(!input.actionPack)throw Error('动作包不存在');}
@@ -131,7 +151,8 @@ const api = async (req, res, url) => {
     if(route==='/api/replica-preview')return reply(res,200,planned);
     if(!/^[a-f0-9-]{36}$/.test(input.requestId||''))throw Error('缺少有效请求标识');
     const existing=queue.state.batches.find(b=>b.replicaRequestId===input.requestId);if(existing)return reply(res,200,existing);
-    if(!replicaRequests.has(input.requestId))replicaRequests.set(input.requestId,(async()=>{if(routeInfo.id==='doubao')await provider.doubao.prepareBatch(planned.prompts.length);const batch=queue.enqueue(planned.prompts);batch.replicaRequestId=input.requestId;queue.save();return batch})());
+    const submission=planReplicaSubmission(input,planned,queue.state.jobs);
+    if(!replicaRequests.has(input.requestId))replicaRequests.set(input.requestId,(async()=>{if(routeInfo.id==='doubao')await prepareDoubao(submission.prompts.length);const batch=queue.enqueue(submission.prompts);batch.adoptedTrialId=submission.adoptedTrialId;batch.requestedCount=Number(input.count);batch.replicaRequestId=input.requestId;queue.save();return batch})());
     try{return reply(res,201,await replicaRequests.get(input.requestId))}finally{replicaRequests.delete(input.requestId)}
   }
   const localVideo=/^\/api\/video-local\/([a-f0-9-]{36})$/.exec(route);
@@ -242,7 +263,7 @@ const api = async (req, res, url) => {
     if (!routeInfo) throw new Error('视频模型路由不存在');
     for (const item of input.items || []) for (const id of item.referenceImageIds || []) references.get(id);
     const planned = planStoryVideoJobs(input, routeInfo);
-    if(routeInfo.id==='doubao')await provider.doubao.prepareBatch(1);
+    if(routeInfo.id==='doubao')await prepareDoubao(1);
     return reply(res, 201, queue.enqueue(planned, { reviewFirst: true }));
   }
   if (route === '/api/keyframe-batches' && req.method === 'GET') return reply(res, 200, keyframeBatches.list());
@@ -260,7 +281,7 @@ const api = async (req, res, url) => {
     if (!routeInfo) throw new Error('视频模型路由不存在');
     if (requestedRoute === 'doubao') { const info = await provider.doubao.info(); if (!info.ready) throw new Error(info.message); }
     if (requestedRoute !== 'doubao' && !routeInfo.configured) throw new Error(`${routeInfo.name} 尚未配置`);
-    if (requestedRoute === 'doubao') await provider.doubao.prepareBatch(1);
+    if (requestedRoute === 'doubao') await prepareDoubao(1);
     return reply(res, 201, await keyframeBatches.confirm(confirmKeyframeMatch[1], input));
   }
   const skillMatch = /^\/api\/skills\/([a-f0-9-]{36})$/i.exec(route);
@@ -349,7 +370,7 @@ const api = async (req, res, url) => {
   const approveMatch = /^\/api\/trials\/([a-f0-9-]{36})\/approve$/i.exec(route);
   if (approveMatch && req.method === 'POST') {
     const trial = trials.get(approveMatch[1]);
-    if (trial.videoRoute === 'doubao') await provider.doubao.prepareBatch(Math.max(1, Number(trial.count) - 1));
+    if (trial.videoRoute === 'doubao') await prepareDoubao(Math.max(1, Number(trial.count) - 1));
     return reply(res, 200, await trials.approve(approveMatch[1]));
   }
   const downloadMatch = /^\/api\/trials\/([a-f0-9-]{36})\/download$/i.exec(route);
@@ -363,7 +384,7 @@ const api = async (req, res, url) => {
   if (archiveMatch && req.method === 'GET') return await media.archive(trialJobs(archiveMatch[1]), res);
   if (route === '/api/batches' && req.method === 'POST') {
     const input = await body(req); const planned = planBatch(input);
-    if (input.videoRoute === 'doubao' || input.generationMethod === 'doubao') await provider.doubao.prepareBatch(planned.length);
+    if (input.videoRoute === 'doubao' || input.generationMethod === 'doubao') await prepareDoubao(planned.length);
 
     return reply(res, 201, queue.enqueue(planned));
   }
@@ -372,7 +393,7 @@ const api = async (req, res, url) => {
   if (batchReviewMatch && req.method === 'GET') return reply(res, 200, queue.review(batchReviewMatch[1]));
   if (batchReviewMatch && req.method === 'POST') {
     const review = queue.review(batchReviewMatch[1]);
-    if(review.required&&!review.approved&&review.ready){const first=queue.state.jobs.find(j=>j.id===review.trialJobId);if(first?.videoRoute==='doubao')await provider.doubao.prepareBatch(review.remaining);}
+    if(review.required&&!review.approved&&review.ready){const first=queue.state.jobs.find(j=>j.id===review.trialJobId);if(first?.videoRoute==='doubao')await prepareDoubao(review.remaining);}
     return reply(res, 200, queue.approveReview(batchReviewMatch[1]));
   }
   const batchDownloadMatch = /^\/api\/batches\/([a-f0-9-]{36})\/download$/i.exec(route);
@@ -423,6 +444,10 @@ http.createServer(async (req, res) => {
     if (!['GET', 'HEAD'].includes(req.method) && req.headers.origin && req.headers.origin !== `http://127.0.0.1:${port}`) return reply(res, 403, { error: '仅允许从本地工作台提交请求' });
     const url = new URL(req.url, `http://127.0.0.1:${port}`);
     if (url.pathname.startsWith('/api/')) return await api(req, res, url);
+    if(req.method==='GET'&&['/studio-ui.js','/studio-ui.css'].includes(url.pathname))return reply(res,200,fs.readFileSync(path.join(root,url.pathname.slice(1))),url.pathname.endsWith('.css')?'text/css; charset=utf-8':'text/javascript; charset=utf-8');
+    if(req.method==='GET'&&['/studio','/templates','/works','/assets','/accounts','/settings'].includes(url.pathname))return reply(res,200,fs.readFileSync(path.join(root,'studio.html')),'text/html; charset=utf-8');
+    if(req.method==='GET'&&url.pathname==='/replicate')return reply(res,200,fs.readFileSync(path.join(root,'replica-studio.html')),'text/html; charset=utf-8');
+    if(req.method==='GET'&&url.pathname==='/'&&!url.searchParams.has('mode')){res.writeHead(302,{Location:'/studio'});return res.end();}
     if (req.method === 'GET' && ['/workbench-ui.css', '/workbench-ui.js', '/replica-ui.css', '/replica-ui.js', '/subtitle-ui.js', '/video-preview.js', '/image-warehouse.js', '/prompt-inputs.js', '/action-prompts-ui.js', '/video-cards.js', '/template-examples.js', '/generation-history.js'].includes(url.pathname)) return reply(res, 200, fs.readFileSync(path.join(root, url.pathname.slice(1))), url.pathname.endsWith('.css') ? 'text/css; charset=utf-8' : 'text/javascript; charset=utf-8');
     if (req.method === 'GET' && url.pathname === '/legacy' && url.searchParams.get('tab') === 'accounts') return reply(res, 200, fs.readFileSync(path.join(root, 'index.html')), 'text/html; charset=utf-8');
     if (req.method === 'GET' && url.pathname === '/legacy') { res.writeHead(302, { Location: '/?mode=store', 'Cache-Control': 'no-store' }); return res.end(); }

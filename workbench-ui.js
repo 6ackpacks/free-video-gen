@@ -29,9 +29,8 @@
   }
   function dock(column, ids) { const el=document.createElement('div');el.className='wb-bottom';ids.forEach(id=>{const n=byId(id);if(n)el.append(n)});column.append(el);return el; }
   function nav(mode) {
-    const el=document.createElement('aside');el.className='wb-nav';el.setAttribute('aria-label','工作台导航');el.innerHTML=`<div class="wb-logo">帧间</div><small>创作工作区</small><a href="/?mode=store" class="${mode==='store'?'active':''}">${icon('grid')}门店视频</a><a href="/?mode=paired" class="${mode==='paired'?'active':''}">${icon('film')}家庭按摩</a><a href="/story" class="${mode==='story'?'active':''}">${icon('pen')}短剧生成</a><a href="/clone" class="${mode==='clone'?'active':''}">${icon('film')}爆款复刻</a><a href="/production" class="${mode==='production'?'active':''}">${icon('grid')}预设生产</a><small>管理与复用</small><button id="wbWarehouse">${icon('folder')}我的图片仓库</button><button id="wbLibrary">${icon('folder')}素材与历史</button><button id="wbPresets">${icon('clock')}我的预设</button><a id="wbAccounts" href="/?mode=store&tab=accounts">${icon('user')}豆包账号池</a><div class="wb-nav-footer">本地工作台<br>草稿自动保存 · 结果可复用</div>`;
-    document.body.prepend(el);byId('wbWarehouse').onclick=()=>window.ImageWarehouse.open();byId('wbLibrary').onclick=()=>openLibrary();byId('wbPresets').onclick=()=>location.href='/presets';if(mode==='presets')byId('wbPresets').classList.add('active');
-    if(byId('accountsPage'))byId('wbAccounts').onclick=e=>{e.preventDefault();document.querySelector('[data-tab="accounts"]')?.click()};
+    const el=document.createElement('aside');el.className='wb-nav';el.setAttribute('aria-label','工作台导航');el.innerHTML=`<a class="wb-logo" href="/studio" style="color:inherit;text-decoration:none">帧间</a><small>创作工作区</small><a href="/studio">${icon('grid')}制作台</a><a href="/replicate" class="${mode==='clone'?'active':''}">${icon('film')}爆款复刻</a><a href="/templates">${icon('grid')}模板中心</a><a href="/works">${icon('film')}我的作品</a><a href="/assets">${icon('folder')}我的素材</a><a href="/accounts">${icon('user')}豆包账号池</a><a href="/settings">${icon('grid')}设置</a><div class="wb-nav-footer">本地工作台<br>草稿自动保存 · 结果可复用</div>`;
+    document.body.prepend(el);
   }
   function createFrame(main) {
     frame=document.createElement('div');frame.className='wb-frame';

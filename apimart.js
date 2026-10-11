@@ -8,7 +8,6 @@ import { draftMessages, cleanDraft } from './prompt-framework.js';
 import { actionDraftMessages, parseActionDraft, rewriteMessages, parseRewrites, promptInputs } from './prompt-guidance.js';
 import { readSecret } from './secrets.js';
 
-const base = 'https://api.apimart.ai';
 const windowsPowerShell = path.join(process.env.SystemRoot || process.env.WINDIR || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
 const apimartProxy = process.env.APIMART_PROXY?.trim() || '';
 const apimartDispatcher = apimartProxy ? new ProxyAgent(apimartProxy) : undefined;
@@ -41,6 +40,7 @@ class Gate {
 }
 
 export function createProvider({ apiKey, model, chatProvider }) {
+  const base = process.env.APIMART_BASE_URL || 'https://api.apimart.ai';
   let key = apiKey || readSecret('VIDEO') || '';
   if (!key && process.env.VIDEO_API_KEY_DPAPI_FILE && fs.existsSync(process.env.VIDEO_API_KEY_DPAPI_FILE)) {
     const script = '$s=(Get-Content -LiteralPath $env:CODEX_SECRET_FILE -Raw).Trim() | ConvertTo-SecureString; $p=[Runtime.InteropServices.Marshal]::SecureStringToBSTR($s); try { [Console]::Out.Write([Runtime.InteropServices.Marshal]::PtrToStringBSTR($p)) } finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($p) }';
@@ -152,7 +152,7 @@ export function createProvider({ apiKey, model, chatProvider }) {
         method: 'POST', body: JSON.stringify(payload)
       }, 60000);
       const task = data?.data?.[0];
-      if (!task?.task_id) throw new Error('APIMart 未返回任务 ID');
+      if (!task?.task_id) {const error=new Error('APIMart 未返回任务 ID，请核对提交结果');error.transient=true;throw error;}
       return { id: task.task_id, status: 'waiting', outputs: [] };
     },
     async status(id) {
@@ -193,9 +193,9 @@ export function createProvider({ apiKey, model, chatProvider }) {
       if (!task?.task_id) throw new Error('APIMart 生图接口未返回任务 ID');
       return { id: task.task_id, status: 'waiting' };
     },
-    async submitKeyframe(prompt) {
+    async submitKeyframe(prompt, {referenceUrl = ''} = {}) {
       const data = await request('/v1/images/generations', { method: 'POST', body: JSON.stringify({
-        model: imageModel, prompt, resolution: process.env.IMAGE_RESOLUTION || '1k', quality: process.env.IMAGE_QUALITY || 'high', n: 1, output_format: 'png'
+        model: imageModel, prompt, ...(referenceUrl ? {image_urls:[referenceUrl]} : {}), resolution: process.env.IMAGE_RESOLUTION || '1k', quality: process.env.IMAGE_QUALITY || 'high', n: 1, output_format: 'png'
       }) }, 60000);
       const task = data?.data?.[0];
       if (!task?.task_id) throw new Error('APIMart 生图接口未返回任务 ID');

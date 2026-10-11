@@ -119,7 +119,7 @@ test('batch archive is a downloadable zip with a safe custom filename', async t 
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'video-archive-'));
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
   const store = new MediaStore(directory, { maxKbps: 8192 });
-  const jobs = [{ id: 'one' }, { id: 'two' }];
+  const jobs = [{ id: 'one',exportName:'足浴店/走廊同行/001.mp4' }, { id: 'two',exportName:'足浴店/走廊同行/001.mp4' }];
   fs.writeFileSync(store.filename(jobs[0]), Buffer.from('video-one'));
   fs.writeFileSync(store.filename(jobs[1]), Buffer.from('video-two'));
   const res = new PassThrough();
@@ -134,4 +134,13 @@ test('batch archive is a downloadable zip with a safe custom filename', async t 
   assert.equal(headers['Content-Type'], 'application/zip');
   assert.equal(headers['Content-Disposition'], 'attachment; filename="videos-batch_01.zip"');
   assert.equal(bytes.subarray(0, 4).toString('hex'), '504b0304');
+  const names=[];let offset=0;
+  while(bytes.readUInt32LE(offset)===0x04034b50){
+    assert.equal(bytes.readUInt16LE(offset+6)&0x800,0x800);
+    const length=bytes.readUInt16LE(offset+26),extra=bytes.readUInt16LE(offset+28),size=bytes.readUInt32LE(offset+18);
+    names.push(bytes.subarray(offset+30,offset+30+length).toString('utf8'));
+    offset+=30+length+extra+size;
+  }
+  assert.equal(names.length,2);assert.equal(new Set(names).size,2);
+  assert.ok(names.every(n=>n.startsWith('足浴店/走廊同行/')));
 });

@@ -187,16 +187,19 @@ export class MediaStore {
     if (jobs.length > 65535 || totalBytes > 0xffffffff) throw new Error('ZIP 超过 4GB，请分批下载');
     const safeName = String(filename || 'videos.zip').replace(/[^a-zA-Z0-9._-]/g, '_');
     res.writeHead(200, { 'Content-Type': 'application/zip', 'Content-Disposition': `attachment; filename="${safeName}"`, 'Cache-Control': 'no-store' });
+    const usedNames=new Set();
     for (let i = 0; i < jobs.length; i++) {
       const file = this.filename(jobs[i]);
-      const name = Buffer.from(`video-${String(i + 1).padStart(3, '0')}.mp4`);
+      let entryName=(jobs[i].exportName || `${jobs[i].sceneId||'历史未分类'}/${jobs[i].templateName||jobs[i].actionName||jobs[i].skillName||jobs[i].actionTemplate?.name||'历史模板'}/${String(i+1).padStart(3,'0')}.mp4`).replace(/(?:\.\.|[\\:*?"<>|\x00-\x1f])/g,'_').replace(/^\/+/, '');
+      if(usedNames.has(entryName))entryName=entryName.replace(/\.mp4$/i,'')+'-'+jobs[i].id+'.mp4';
+      usedNames.add(entryName);const name=Buffer.from(entryName);
       const size = fs.statSync(file).size;
       if (size > 0xffffffff || offset + size > 0xffffffff) throw new Error('ZIP 超过 4GB，请分批下载');
       let crc = 0xffffffff;
       for await (const chunk of fs.createReadStream(file)) crc = crcUpdate(crc, chunk);
       crc = (crc ^ 0xffffffff) >>> 0;
       const local = Buffer.alloc(30);
-      local.writeUInt32LE(0x04034b50, 0); local.writeUInt16LE(20, 4); local.writeUInt32LE(crc, 14); local.writeUInt32LE(size, 18); local.writeUInt32LE(size, 22); local.writeUInt16LE(name.length, 26);
+      local.writeUInt32LE(0x04034b50, 0); local.writeUInt16LE(20, 4); local.writeUInt16LE(0x800,6); local.writeUInt32LE(crc, 14); local.writeUInt32LE(size, 18); local.writeUInt32LE(size, 22); local.writeUInt16LE(name.length, 26);
       await write(res, local); await write(res, name);
       for await (const chunk of fs.createReadStream(file)) await write(res, chunk);
       entries.push({ name, size, crc, offset });
@@ -206,6 +209,7 @@ export class MediaStore {
     for (const entry of entries) {
       const header = Buffer.alloc(46);
       header.writeUInt32LE(0x02014b50, 0); header.writeUInt16LE(20, 4); header.writeUInt16LE(20, 6);
+      header.writeUInt16LE(0x800,8);
       header.writeUInt32LE(entry.crc, 16); header.writeUInt32LE(entry.size, 20); header.writeUInt32LE(entry.size, 24);
       header.writeUInt16LE(entry.name.length, 28); header.writeUInt32LE(entry.offset, 42);
       await write(res, header); await write(res, entry.name); offset += 46 + entry.name.length;

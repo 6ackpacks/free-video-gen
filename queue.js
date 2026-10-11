@@ -65,7 +65,7 @@ export class VideoQueue {
     this.save(); queueMicrotask(() => this.pump()); return this.review(batchId);
   }
   pump() {
-    if (!this.provider) return;
+    if (!this.provider || this.studioSettings?.paused) return;
     for (const job of this.state.jobs) {
       if (this.drafting.size >= this.maxDrafts) break;
       if (job.status !== 'draft_pending' || job.nextAt > now()) continue;
@@ -98,23 +98,29 @@ export class VideoQueue {
       if (this.submitting.size >= this.maxSubmits) break;
       if (this.submitTimes.length >= this.submitsPerMinute) break;
       if (job.status !== 'queued' || job.nextAt > now()) continue;
-      job.status = 'submitting'; job.attempts++;
+      job.status = 'submitting'; job.attempts++; job.roundAttempts=(job.roundAttempts||0)+1;
+      job.attemptHistory ||= [];
+      const last=job.attemptHistory.at(-1);
+      const attempt=last?.status==='waiting-account'?Object.assign(last,{status:'submitting'}):{number:job.attempts,startedAt:new Date().toISOString(),status:'submitting'};if(attempt!==last)job.attemptHistory.push(attempt);
       this.submitTimes.push(now());
       this.submitting.add(job.id); this.save();
       Promise.resolve().then(() => this.provider.submit({ ...job, idempotencyKey: job.id }))
         .then(result => {
-          if (!result?.id) throw new Error('视频 API 未返回任务 ID');
+          if (!result?.id) {const error=new Error('视频 API 未返回任务 ID，请核对上游提交结果');error.transient=true;throw error;}
           job.providerId = result.id;
           job.status = ['complete', 'error', 'running'].includes(result.status) ? result.status : 'waiting';
           job.outputs = result.outputs || [];
           job.error = result.error || '';
           job.nextAt = now() + 5000;
+          Object.assign(attempt,{providerId:result.id,status:job.status});
           this.save();
         })
         .catch(error => {
           job.error = error.message || String(error);
+          Object.assign(attempt,{status:error.waitForAccount?'waiting-account':'error',error:job.error});
+          if(error.waitForAccount){job.status='queued';job.nextAt=now()+15000;job.attempts--;job.roundAttempts--;this.save();return;}
           const retryable = error.status === 429 || (this.provider.supportsIdempotency && (error.status >= 500 || error.transient));
-          job.status = job.attempts < 6 && retryable ? 'queued' : (!this.provider.supportsIdempotency && (error.status >= 500 || error.transient) ? 'needs_review' : 'error');
+          job.status = job.roundAttempts < 6 && retryable ? 'queued' : (!this.provider.supportsIdempotency && (error.status >= 500 || error.transient) ? 'needs_review' : 'error');
           job.nextAt = now() + retryDelay(job.attempts, error);
           this.save();
         })
@@ -130,6 +136,8 @@ export class VideoQueue {
       Promise.resolve().then(() => this.provider.status(job.providerId, job))
         .then(result => {
           job.status = result.status;
+          const attempt=job.attemptHistory?.at(-1);
+          if(attempt?.providerId===job.providerId){attempt.status=result.status;if(result.progress?.accountId)attempt.accountId=result.progress.accountId;if(['complete','error'].includes(result.status))attempt.finishedAt=new Date().toISOString();}
           if (result.progress) job.providerProgress = result.progress;
           job.outputs = result.outputs || job.outputs;
           job.error = result.error || '';
@@ -150,13 +158,15 @@ export class VideoQueue {
   retry(jobId) {
     const job = this.state.jobs.find(item => item.id === jobId);
     if (!job) throw new Error('视频任务不存在');
-    if (!['error', 'needs_review'].includes(job.status)) throw new Error('只能重试失败或待确认的任务');
+    if (job.status === 'needs_review') throw Error('提交结果未知，请先核对上游任务，禁止直接重复提交');
+    if (job.status !== 'error') throw new Error('只能重试失败的任务');
     const needsDraft = this.provider?.draft && this.provider?.promptModel && !String(job.prompt || '').trim();
     job.status = needsDraft ? 'draft_pending' : 'queued';
     job.error = '';
+    job.previousProviderIds ||= []; if(job.providerId)job.previousProviderIds.push(job.providerId);
     job.providerId = null;
-    job.attempts = 0;
     job.draftAttempts = 0;
+    job.roundAttempts = 0;
     job.nextAt = 0;
     this.save();
     queueMicrotask(() => this.pump());
