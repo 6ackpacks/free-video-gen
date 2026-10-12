@@ -5,7 +5,7 @@
   async function load(img){
     const id=img.dataset.videoPoster;
     if(!known.has(id))known.set(id,new Promise(resolve=>{pending.push({id,src:img.dataset.videoSrc,resolve});pump();}));
-    const src=await known.get(id);if(src&&img.isConnected){img.src=src;img.closest('.video-cover')?.classList.add('has-poster');}
+    img.dataset.posterState='loading';const src=await known.get(id);if(img.isConnected)img.dataset.posterState=src?'ready':'unavailable';if(src&&img.isConnected){img.src=src;img.closest('.video-cover')?.classList.add('has-poster');}
   }
   function pump(){while(running<2&&pending.length){const task=pending.shift();running++;create(task).then(task.resolve).catch(()=>task.resolve('')).finally(()=>{running--;pump();});}}
   async function create({id,src}){

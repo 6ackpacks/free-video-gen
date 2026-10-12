@@ -585,3 +585,39 @@
   .reference-replica .replica-steps { gap: 8px; }
   .reference-replica .replica-steps button { padding: 4px 0; font-size: 11px; }
 }
+
+/* Clear reference upload and change actions, plus the visible shot structure. */
+.replica-title-row{display:flex;align-items:center;gap:16px}
+.replica-title-row .replica-new{min-height:32px;padding:6px 11px;font-size:12px;color:var(--accent);border-color:#CAD4F3;background:white;white-space:nowrap}
+.replica-title-row h1{margin:0!important}
+.reference-title{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:14px!important}
+.reference-ready{font-size:11px;white-space:nowrap;background:var(--accent-soft);color:var(--accent);font-weight:500}
+.reference-upload-actions{display:flex;gap:8px;margin-bottom:10px}
+.reference-upload-actions button{flex:1;min-height:38px;font-size:12px;padding:8px 10px;white-space:nowrap}
+.reference-upload-hint{font-size:12px!important;line-height:1.7;color:var(--muted)}
+.reference-file-field{display:none!important}
+.reference-resume{display:block;margin-top:15px;color:var(--accent);font-size:12px}
+.reference-analyze-actions{display:flex;gap:8px;margin:14px 0;flex-wrap:wrap}
+.reference-analyze-actions button{width:100%;margin:0!important;min-height:38px;font-size:12px}
+.reference-analyze-actions #analyze{background:var(--accent);border-color:var(--accent);color:white}
+.reference-structure{margin:20px 0;border-top:1px solid var(--border);padding-top:16px}
+.reference-structure h3{font-size:16px;margin:0 0 10px}
+.reference-structure ol{list-style:none;padding:8px 12px;margin:0;background:var(--surface-soft);border-radius:8px;max-height:206px;overflow:auto}
+.reference-structure li{display:flex;gap:10px;padding:9px 0}
+.reference-structure li>span{width:24px;height:24px;flex:0 0 24px;border-radius:50%;background:white;display:grid;place-items:center;font-size:12px;color:var(--text-secondary)}
+.reference-structure li>div{min-width:0}
+.reference-structure strong{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:600}
+.reference-structure strong small{font-size:10px;color:var(--muted);font-weight:400;white-space:nowrap}
+.reference-structure p{font-size:11px;line-height:1.65;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;margin:4px 0 0!important}
+.reference-replica #sourcePlayer{width:100%;max-height:245px;object-fit:contain;background:#20242E;border-radius:8px;margin:10px 0}
+.reference-replica .shot-heading{display:flex;align-items:center;gap:9px;font-size:14px;margin-bottom:8px}
+.reference-replica #clonePage[data-step="1"] .reference-hero:empty{min-height:150px;border:1px dashed #C9D2E7;border-radius:10px;background:var(--surface-soft);display:grid;place-items:center}
+.reference-replica #clonePage[data-step="1"] .reference-hero:empty:after{content:'上传参考视频后，在这里预览';font-size:13px;color:var(--muted)}
+@media(max-width:1100px){.replica-title-row{flex-wrap:wrap;gap:10px}.reference-upload-actions{flex-wrap:wrap}.reference-upload-actions button{min-width:120px}}
+@media(max-width:760px){.reference-title{font-size:18px!important}.reference-upload-actions button{min-width:100px}.replica-title-row .replica-new{min-height:32px}.reference-structure ol{max-height:175px}}
+
+.reference-replica .reference-upload-actions .primary{background:var(--accent);border-color:var(--accent);color:white}
+.reference-upload-actions [hidden]{display:none!important}
+.reference-upload-actions #changeReplicaReference{width:100%;flex:1}
+
+.reference-replica .reference-hero[hidden]{display:none!important}
