@@ -3,7 +3,7 @@ import path from 'node:path';
 import {randomUUID} from 'node:crypto';
 import {spawnSync} from 'node:child_process';
 import {hasSecret} from './secrets.js';
-const fields=['APIMART_BASE_URL','IMAGE_MODEL','VIDEO_MODEL','PROMPT_MODEL','SCENE_ANALYSIS_MODEL','TEXT_PROVIDER','TOKENDANCE_CHAT_BASE_URL','TOKENDANCE_PROMPT_MODEL','TOKENDANCE_VISION_MODEL'];
+const fields=['DASHSCOPE_WORKSPACE_ID','APIMART_BASE_URL','IMAGE_MODEL','VIDEO_MODEL','PROMPT_MODEL','SCENE_ANALYSIS_MODEL','TEXT_PROVIDER','TOKENDANCE_CHAT_BASE_URL','TOKENDANCE_PROMPT_MODEL','TOKENDANCE_VISION_MODEL'];
 export function loadStudioConnections(root){const file=path.join(root,'data','studio-connections.json');if(!fs.existsSync(file))return;const saved=JSON.parse(fs.readFileSync(file,'utf8'));for(const key of [...fields,'VIDEO_API_KEY_DPAPI_FILE','TOKENDANCE_API_KEY_DPAPI_FILE'])if(Object.hasOwn(saved,key))process.env[key]=saved[key];}
 export function publicConnections(){return {values:Object.fromEntries(fields.map(k=>[k,process.env[k]||''])),videoKeyConfigured:hasSecret('VIDEO'),textKeyConfigured:hasSecret('TOKENDANCE')};}
 export function saveStudioConnections(root,input){

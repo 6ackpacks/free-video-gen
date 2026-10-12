@@ -1,3 +1,4 @@
+import {catalogSeeds, buildCatalog} from './studio-catalog.js';
 import path from 'node:path';
 import {randomUUID} from 'node:crypto';
 import {StudioDomain, slotsFor} from './studio-domain.js';
@@ -6,6 +7,7 @@ import {loadActionTemplates, templatesWithCompatibility} from './action-template
 import {STORY_TEMPLATES} from './story-library.js';
 import {DraftTasks} from './draft-tasks.js';
 import {StudioImages} from './studio-images.js';
+import {creativePrompt,creativeErrors} from './studio-creative-inputs.js';
 import {replicaPrompts} from './replica-workflow.js';
 
 export function studioSeeds(workspace,packs=listContentPacks()) {
@@ -19,7 +21,7 @@ export function studioSeeds(workspace,packs=listContentPacks()) {
   }
   for(const t of STORY_TEMPLATES)templates.push({id:'story:'+t.id,name:t.name,scene:'story',description:t.rules||t.description||t.name,storyTemplate:t,actions:[],people:'按脚本确定成年人物',duration:15,mapping:'shots',imageRules:'按已确认分镜准备角色与商品图片，不从图片文件名推断品牌事实。'});
   for(const p of workspace.state.presets||[])if(p.kind==='replica')templates.push({id:p.id,name:p.name,scene:'',description:p.replica.template,replica:p.replica,source:p.sourceId?'replica':'my',originSourceId:p.sourceId||'',duration:p.settings?.duration||5,mapping:'common',actions:(p.replica.beats||[]).map(b=>b.action),imageRules:'可替换初始画面与模板变量，保留已确认节奏。',legacyPresetId:p.id,actionPack:structuredClone((workspace.state.actionPacks||[]).find(a=>a.id===p.settings?.actionPackId)||null)});
-  return {scenes,templates};
+  templates.push(...catalogSeeds());return {scenes,templates};
 }
 export class StudioService {
   constructor({root,provider,queue,references,workspace,storyLibrary,replicaSources,presentation,media}){
@@ -44,21 +46,22 @@ export class StudioService {
     return [...images,...videos,...brands];
   }
   works(){return this.queue.state.jobs.map(j=>({...j,sceneId:j.projectId?j.sceneId:j.packId==='ktv-business'?'ktv':j.packId==='foot-spa-store'?'footspa':j.skillId==='story-ad'?'story':j.skillId==='paired-reference'?'massage':j.sceneId,templateId:j.templateId||(j.actionId?`${j.packId||'historical'}:${j.actionId}`:undefined),templateName:j.templateName||j.actionName||j.skillName||j.actionTemplate?.name||'历史未分类'}));}
-  overview(){return {scenes:this.scenes,templates:this.domain.state.templates.map(t=>({...t,example:t.packId&&t.actionId?this.presentation.example(t.packId,t.actionId,this.queue.state.jobs):null})),projects:this.domain.state.projects,assets:this.assets(),actionPacks:this.workspace.state.actionPacks||[],imageTasks:this.images.tasks.map(t=>({id:t.id,projectId:t.projectId,createdAt:t.createdAt,status:t.status,items:t.items.map(i=>({id:i.id,name:i.name,status:i.status,error:i.error,providerId:i.providerId,referenceIdResult:i.referenceIdResult}))})),routes:this.provider.routes,keyframeConfigured:this.provider.keyframeConfigured,settings:this.domain.state.settings};}
+  overview(){const catalog=buildCatalog(this.domain.state.templates,this.domain.state.industries);return {...catalog,scenes:[...this.scenes,...catalog.industries.filter(i=>i.id!=='general'&&!this.scenes.some(s=>s.id===i.id)).map(i=>({...i,description:i.name,engine:'generic'}))],templates:this.domain.state.templates.map(t=>({...t,example:t.packId&&t.actionId?this.presentation.example(t.packId,t.actionId,this.queue.state.jobs):null})),projects:this.domain.state.projects,assets:this.assets(),actionPacks:this.workspace.state.actionPacks||[],imageTasks:this.images.tasks.map(t=>({id:t.id,projectId:t.projectId,createdAt:t.createdAt,status:t.status,items:t.items.map(i=>({id:i.id,name:i.name,status:i.status,error:i.error,providerId:i.providerId,referenceIdResult:i.referenceIdResult}))})),routes:this.provider.routes,keyframeConfigured:this.provider.keyframeConfigured,settings:this.domain.state.settings};}
   project(id){const p=this.domain.project(id);return {...p,readiness:this.domain.readiness(p,this.provider.routes,this.references),adopted:this.domain.adopted(p,this.queue)};}
   async generate(id,report=()=>{}){
     const p=this.domain.project(id);
+    const inputErrors=creativeErrors(p,this.references,this.provider.routes);if(inputErrors.length)throw Error(inputErrors.join('；'));
     let completed=0;const total=p.plans.reduce((n,v)=>n+v.count,0);
     for(const plan of p.plans){
       const signature=plan.signature;
-      const base=(plan.content||plan.snapshot.description)+'\n已确认动作顺序：'+plan.snapshot.actions.join('；');
+      const base=(plan.content||plan.snapshot.description)+'\n已确认动作顺序：'+plan.snapshot.actions.join('；')+'\n'+creativePrompt(p);
       if(plan.snapshot.replica){
         const jobs=replicaPrompts({replica:plan.snapshot.replica,count:plan.count,duration:plan.duration,videoRoute:plan.videoRoute,resolution:plan.resolution,ratio:'9:16',referenceImageIds:[],actionPack:plan.snapshot.actionPack,actionPackId:plan.snapshot.actionPack?.id,creativeBrief:plan.creativeBrief},this.provider.routes.find(r=>r.id===plan.videoRoute));
         const current=this.domain.project(id).plans.find(v=>v.id===plan.id);current.prompts=jobs.prompts.map((j,i)=>j.prompt+(slotsFor(plan)[i].length?'\n附件是本画面的初始图片或主体参考；使用附件中的主体替换原视频对应内容，保留模板的镜头风格和相对节奏。':''));current.promptsDirty=false;this.domain.save();completed+=plan.count;report({completed,total});continue;
       }
       const prompts=[];
       for(let offset=0;offset<plan.count;offset+=10){
-      const result=await this.provider.rewritePrompts({mode:p.scene==='story'?'story':p.scene==='massage'?'paired':'store',creativeBrief:plan.creativeBrief,outputLanguage:'zh',context:{brandName:p.brandName,brandFacts:p.brandFacts,imageRules:plan.snapshot.imageRules,actions:plan.snapshot.actions,duration:plan.duration,sceneEvidence:(plan.imageIds||[]).map(id=>this.references.get(id).sceneProfile),requirements:p.scene==='story'?'输出完整脚本和编号分镜；仅用品牌事实，未知信息写待确认。':`单个固定镜头，1–2个自然动作，不改变底图空间。每条人物外貌、自然穿搭、表情和细节有所变化，保持动作一致。${p.scene==='ktv'?'KTV商业氛围，不套用足浴或监控风格。':''}`},items:Array.from({length:Math.min(10,plan.count-offset)},(_,i)=>({id:String(offset+i),prompt:`第${offset+i+1}条，${plan.duration}秒。模板规则：${base}\n人物：${plan.snapshot.people}\n图片要求：${plan.snapshot.imageRules}\n${p.scene==='story'?`宣传主体：${p.brandName}\n已确认资料：${p.brandFacts}\n请生成完整脚本和按时间顺序编号的分镜。`:''}`}))});
+      const result=await this.provider.rewritePrompts({mode:p.scene==='story'?'story':p.scene==='massage'?'paired':'store',creativeBrief:plan.creativeBrief,outputLanguage:'zh',context:{brandName:p.brandName,brandFacts:p.brandFacts,imageRules:plan.snapshot.imageRules,actions:plan.snapshot.actions,duration:plan.duration,sceneEvidence:(plan.imageIds||[]).map(id=>this.references.get(id).sceneProfile),requirements:(p.videoDirection||p.templateTypeId?.endsWith(':avatar-talk'))?'按用户确认的视频方向与文案，在指定时长内输出完整短片提示词；不要覆盖单场景口播或一镜到底约束。':p.scene==='story'?'输出完整脚本和编号分镜；仅用品牌事实，未知信息写待确认。':`单个固定镜头，1–2个自然动作，不改变底图空间。每条人物外貌、自然穿搭、表情和细节有所变化，保持动作一致。${p.scene==='ktv'?'KTV商业氛围，不套用足浴或监控风格。':''}`},items:Array.from({length:Math.min(10,plan.count-offset)},(_,i)=>({id:String(offset+i),prompt:`第${offset+i+1}条，${plan.duration}秒。模板规则：${base}\n人物：${plan.snapshot.people}\n图片要求：${plan.snapshot.imageRules}\n${p.scene==='story'?`宣传主体：${p.brandName}\n已确认资料：${p.brandFacts}\n请生成完整脚本和按时间顺序编号的分镜。`:''}`}))});
       prompts.push(...result.items.map(v=>v.prompt));report({completed:completed+prompts.length,total});
       }
       const current=this.domain.project(id).plans.find(v=>v.id===plan.id);
@@ -76,7 +79,7 @@ export class StudioService {
         const pack=listContentPacks().find(v=>v.id===template.packId);
         if(pack?.actionLibrary&&profile){const compat=templatesWithCompatibility(profile,contentPackActionDirectory(pack),{expectedCount:pack.expectedActionCount}).find(v=>v.id===template.actionId);if(compat&&!compat.compatibility.compatible)throw Error(compat.compatibility.reasons.join('；'));}
       }
-      return {id:randomUUID(),index:index+1,skillId:p.scene==='story'?'story-ad':'studio',sceneId:p.scene,projectId:p.id,planId:plan.id,slotIndex:index,templateId:plan.templateId,templateVersion:template.version,templateSnapshot:structuredClone(template),templateName:template.name,packId:template.packId,actionId:template.actionId,actionTemplate:template.actionTemplate,duration:plan.duration,videoRoute:plan.videoRoute,resolution:plan.resolution,ratio:'9:16',prompt:plan.prompts[index],lockedPrompt:true,referenceImageIds:ids,referenceId:ids[0]||'',referenceMode:ids.length>1?'reference-image':'first-frame',exportName:`${p.scene}/${template.name}/${String(index+1).padStart(3,'0')}.mp4`};
+      return {id:randomUUID(),index:index+1,skillId:p.scene==='story'?'story-ad':'studio',sceneId:p.scene,projectId:p.id,planId:plan.id,slotIndex:index,templateId:plan.templateId,templateVersion:template.version,templateSnapshot:structuredClone(template),templateName:template.name,packId:template.packId,actionId:template.actionId,actionTemplate:template.actionTemplate,duration:plan.duration,videoRoute:plan.videoRoute,resolution:plan.resolution,ratio:plan.ratio||'9:16',prompt:plan.prompts[index],lockedPrompt:true,referenceImageIds:plan.referenceMode==='reference-image'?[...new Set([...ids,...Object.values(p.materials||{}).flat()])]:ids,audioUrl:p.avatarMode==='audio-driven'?p.audioUrl:'',nativeAudio:!!p.productBrief?.script||!!p.productBrief?.music,referenceId:ids[0]||'',referenceMode:plan.referenceMode||(ids.length>1?'reference-image':'first-frame'),exportName:`${p.scene}/${template.name}/${String(index+1).padStart(3,'0')}.mp4`};
     }).filter(Boolean));
   }
   submit(input){
@@ -85,6 +88,11 @@ export class StudioService {
     if(this.domain.state.requests[requestId])return this.domain.state.requests[requestId];
     const prior=this.queue.state.jobs.find(j=>j.studioRequestId===requestId);
     if(prior)return this.queue.state.batches.find(b=>b.id===prior.batchId);
+    if(p.templateTypeId){
+      const selection=input.generationSettings;
+      if(!selection||['videoRoute','ratio','resolution','referenceMode'].some(key=>!selection[key]))throw Error('每次生成前必须选择并确认生成参数');
+      if(p.plans.some(plan=>['videoRoute','ratio','resolution','referenceMode'].some(key=>plan[key]!==selection[key])))throw Error('生成参数与项目计划不一致，请重新确认');
+    }
     let validationProject=p;
     if(input.trial){
       const plan=p.plans.find(v=>v.id===input.planId),index=Number(input.index)||0;

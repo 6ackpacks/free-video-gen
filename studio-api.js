@@ -15,6 +15,7 @@ export async function studioApi(service,req,res,url,{body,reply}) {
     }
   }
   if(route==='/api/studio'&&req.method==='GET')return send(service.overview());
+  if(route==='/api/studio/industries'&&req.method==='POST')return send(domain.saveIndustry(await body(req)));
   if(route==='/api/studio/templates'&&req.method==='POST')return send(domain.saveTemplate(await body(req)));
   const template=/^\/api\/studio\/templates\/([^/]+)$/.exec(route);
   if(template&&req.method==='PATCH'){const t=domain.template(decodeURIComponent(template[1]));t.archived=!!(await body(req)).archived;domain.save();return send(t);}
