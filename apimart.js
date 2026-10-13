@@ -193,9 +193,10 @@ export function createProvider({ apiKey, model, chatProvider }) {
       if (!task?.task_id) throw new Error('APIMart 生图接口未返回任务 ID');
       return { id: task.task_id, status: 'waiting' };
     },
-    async submitKeyframe(prompt, {referenceUrl = ''} = {}) {
+    async submitKeyframe(prompt, {referenceUrl = '',referenceUrls=[]} = {}) {
+      const images=[...new Set([referenceUrl,...referenceUrls].filter(Boolean))].slice(0,12);
       const data = await request('/v1/images/generations', { method: 'POST', body: JSON.stringify({
-        model: imageModel, prompt, ...(referenceUrl ? {image_urls:[referenceUrl]} : {}), resolution: process.env.IMAGE_RESOLUTION || '1k', quality: process.env.IMAGE_QUALITY || 'high', n: 1, output_format: 'png'
+        model: imageModel, prompt, ...(images.length ? {image_urls:images} : {}), resolution: process.env.IMAGE_RESOLUTION || '1k', quality: process.env.IMAGE_QUALITY || 'high', n: 1, output_format: 'png'
       }) }, 60000);
       const task = data?.data?.[0];
       if (!task?.task_id) throw new Error('APIMart 生图接口未返回任务 ID');

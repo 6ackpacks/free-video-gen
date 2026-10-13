@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import { DoubaoBridge } from './doubao.js';
 import { createWanProviders } from './wan.js';
+import {createAvatarProvider} from './wan-avatar.js';
 import { hasSecret } from './secrets.js';
 
 export async function loadProvider() {
@@ -31,13 +32,16 @@ export async function loadProvider() {
   let referenceLibrary;
   const doubao = new DoubaoBridge();
   const wan = createWanProviders();
+  wan['wan-avatar']=createAvatarProvider();
   const routes = [
+    {id:'wan-avatar',name:'阿里云配音对口型',model:'wan2.2-s2v',configured:wan['wan-avatar'].configured,audioDriven:true,referenceMode:'reference-image',resolutions:['480P','720P'],duration:{min:2,max:15}},
     { id: 'custom', name: custom?.name || '自有视频模型', model: custom?.model || process.env.CUSTOM_VIDEO_MODEL || 'custom-image-to-video', configured: Boolean(custom), referenceMode: custom?.referenceMode || 'reference-image', resolutions: custom?.resolutions || ['480P', '720P', '1080P'], duration: custom?.duration || { min: 2, max: 30 } },
     { id: 'apimart', name: 'APIMart', model: apimart?.model || 'grok-imagine-1.5-video-ext', configured: Boolean(apimart), referenceMode: 'visual-brief', resolutions: ['480P', '720P'], duration: { min: 6, max: 6 } },
     { id: 'wan-tokendance', name: 'TokenDance', model: 'wan3.0-video', configured: wan['wan-tokendance'].configured, referenceMode: 'reference-image', resolutions: ['480P', '720P', '1080P'], duration: { min: 2, max: 30 } },
     { id: 'wan-aliyun', name: '阿里云百炼', model: 'wan3.0-video', configured: wan['wan-aliyun'].configured, referenceMode: 'reference-image', resolutions: ['480P', '720P', '1080P'], duration: { min: 2, max: 30 } },
     { id: 'doubao', name: '豆包账号池', model: doubao.model, configured: true, referenceMode: 'reference-image', resolutions: ['由豆包决定'], duration: { min: 5, max: 15, values: [5, 10, 15] } }
   ];
+  for(const route of routes)route.nativeAudio=['wan-tokendance','wan-aliyun','doubao'].includes(route.id);
   return {
     name: '多模型路由', model: custom?.model || apimart?.model || '', textProvider:chatProvider?.name||'APIMart', promptModel: apimart?.promptModel || '', sceneAnalysisModel: apimart?.sceneAnalysisModel || '', imageModel: custom?.imageModel || apimart?.imageModel || '', keyframeConfigured: Boolean(custom?.submitKeyframe && custom?.keyframeStatus || apimart?.submitKeyframe && apimart?.keyframeStatus), configured: routes.some(x => x.configured), routes,
     supportsIdempotency: false, custom, apimart, doubao,

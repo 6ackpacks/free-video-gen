@@ -2,7 +2,7 @@ import { readSecret } from './secrets.js';
 
 const cleanError = data => data?.output?.message || data?.message || data?.error?.message || 'Wan3 API 请求失败';
 const stateOf = value => ({ PENDING: 'waiting', RUNNING: 'running', SUCCEEDED: 'complete', FAILED: 'error', CANCELED: 'error', UNKNOWN: 'error' }[String(value || '').toUpperCase()] || 'waiting');
-export const shouldGenerateAudio = prompt => /(?:音乐|配乐|背景音乐|music|soundtrack)/i.test(String(prompt || ''));
+export const shouldGenerateAudio = prompt => /(?:口播|旁白|说话|台词|配音|音乐|配乐|背景音乐|music|soundtrack|speech|narration)/i.test(String(prompt || ''));
 
 export function createWanProvider({ id, name, keyPrefix, submitUrl, tasksBaseUrl, fetchImpl = fetch }) {
   const key = readSecret(keyPrefix);
@@ -29,7 +29,7 @@ export function createWanProvider({ id, name, keyPrefix, submitUrl, tasksBaseUrl
       if (images.length) input.media = images.map(url => ({ type: imageMode === 'reference-image' ? 'reference_image' : 'first_frame', url }));
       const payload = { model: 'wan3.0-video', input, parameters: {
         resolution: normalizeResolution(job.resolution), ratio: imageMode === 'first-frame' && job.referenceImageUrl ? 'adaptive' : (job.ratio || '9:16'),
-        duration: normalizeDuration(job.duration), audio: shouldGenerateAudio(job.prompt), watermark: false, prompt_extend: false, seed: normalizeSeed(job.seed)
+        duration: normalizeDuration(job.duration), audio: !!job.nativeAudio||shouldGenerateAudio(job.prompt), watermark: false, prompt_extend: false, seed: normalizeSeed(job.seed)
       } };
       const data = await request(submitUrl, { method: 'POST', headers: { 'X-DashScope-Async': 'enable' }, body: JSON.stringify(payload) }, 60000);
       const taskId = data?.output?.task_id;

@@ -24,3 +24,8 @@ secrets.json
 coverage/
 __pycache__/
 outputs/
+
+# Local UI screenshots and generated design mockups
+design-drafts/**/*.png
+design-drafts/**/*.jpg
+design-drafts/**/*.webp

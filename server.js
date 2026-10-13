@@ -79,7 +79,7 @@ const media = new MediaStore(path.join(root, 'data', 'videos'),{resolveOutputs:a
 }});
 const presentation = new VideoPresentation(path.join(root,'data','video-presentation'));
 const studio = new StudioService({root,provider,queue,references,workspace:workspaceState,storyLibrary,replicaSources,presentation,media});
-references.isReferenced=id=>queue.state.jobs.some(j=>j.referenceId===id||j.referenceImageIds?.includes(id))||studio.domain.state.projects.some(p=>p.plans.some(plan=>plan.imageIds.includes(id)||plan.rows.some(r=>r.imageId===id)||plan.shotImages.some(ids=>ids.includes(id))));
+references.isReferenced=id=>queue.state.jobs.some(j=>j.referenceId===id||j.referenceImageIds?.includes(id))||studio.domain.state.projects.some(p=>Object.values(p.materials||{}).flat().includes(id)||p.plans.some(plan=>plan.imageIds.includes(id)||plan.rows.some(r=>r.imageId===id)||plan.shotImages.some(ids=>ids.includes(id))));
 const subtitles = new SubtitleRenderer(path.join(root,'data','subtitle-renders'),media);
 const imageTransforms = new ImageTransformManager(path.join(root, 'data'), provider, references);
 const keyframeBatches = new KeyframeBatchManager(path.join(root, 'data', 'keyframe-batches.json'), provider, references, queue, {
@@ -445,7 +445,7 @@ http.createServer(async (req, res) => {
     const url = new URL(req.url, `http://127.0.0.1:${port}`);
     if (url.pathname.startsWith('/api/')) return await api(req, res, url);
     if(req.method==='GET'&&/^\/design-assets\/[a-z0-9-]+\.webp$/.test(url.pathname)){const file=path.join(root,url.pathname.slice(1));if(fs.existsSync(file))return reply(res,200,fs.readFileSync(file),'image/webp');}
-    if(req.method==='GET'&&['/studio-ui.js','/studio-ui.css','/replica-design.js','/replica-design.css'].includes(url.pathname))return reply(res,200,fs.readFileSync(path.join(root,url.pathname.slice(1))),url.pathname.endsWith('.css')?'text/css; charset=utf-8':'text/javascript; charset=utf-8');
+    if(req.method==='GET'&&['/studio-ui.js','/studio-ui.css','/replica-design.js','/replica-design.css','/app-shell.js','/app-shell.css'].includes(url.pathname))return reply(res,200,fs.readFileSync(path.join(root,url.pathname.slice(1))),url.pathname.endsWith('.css')?'text/css; charset=utf-8':'text/javascript; charset=utf-8');
     if(req.method==='GET'&&['/studio','/templates','/works','/assets','/accounts','/settings'].includes(url.pathname))return reply(res,200,fs.readFileSync(path.join(root,'studio.html')),'text/html; charset=utf-8');
     if(req.method==='GET'&&url.pathname==='/replicate')return reply(res,200,fs.readFileSync(path.join(root,'replica-studio.html')),'text/html; charset=utf-8');
     if(req.method==='GET'&&url.pathname==='/'&&!url.searchParams.has('mode')){res.writeHead(302,{Location:'/studio'});return res.end();}
