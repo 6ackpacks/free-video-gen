@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld('doubaoAccounts', {
   start: id => ipcRenderer.invoke('accounts:start', id),
   stop: id => ipcRenderer.invoke('accounts:stop', id),
   select: id => ipcRenderer.invoke('accounts:select', id),
+  conversation: (id, conversationId) => ipcRenderer.invoke('accounts:conversation', {id, conversationId}),
   sync: id => ipcRenderer.invoke('accounts:sync', id),
   setLimit: value => ipcRenderer.invoke('accounts:set-limit', value),
   setBounds: bounds => ipcRenderer.send('accounts:bounds', bounds),

@@ -125,6 +125,12 @@ async function bootstrap() {
     await createView(id); selectedId = id; fitSelected(); return { selectedId: id };
   });
   ipcMain.handle('accounts:sync', async (_, id) => syncAccount(id));
+  ipcMain.handle('accounts:conversation',async(_, {id,conversationId})=>{
+    if(!/^[a-zA-Z0-9_-]{1,100}$/.test(String(conversationId||'')))throw Error('会话编号无效');
+    for(const openId of [...views.keys()])if(openId!==id)await stopView(openId);
+    const view=await createView(id);selectedId=id;fitSelected();
+    await view.webContents.loadURL('https://www.doubao.com/chat/'+encodeURIComponent(conversationId));return {selectedId:id};
+  });
   ipcMain.handle('accounts:set-limit', (_, value) => ({ activeLimit: store.setLimit(value) }));
   ipcMain.on('accounts:bounds', (_, value) => { bounds = { x: Math.max(0, Math.round(value.x)), y: Math.max(0, Math.round(value.y)), width: Math.max(1, Math.round(value.width)), height: Math.max(1, Math.round(value.height)) }; fitSelected(); });
   ipcMain.on('accounts:hide', () => { selectedId = ''; fitSelected(); });

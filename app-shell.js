@@ -3,6 +3,7 @@
   const items=[['home','首页','/studio'],['batch','批量制作','/studio?new=1'],['replicate','爆款复刻','/replicate'],['templates','模板中心','/templates'],['works','我的作品','/works'],['assets','我的素材','/assets'],['accounts','豆包账号池','/accounts']];
   const icon=id=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths[id]}</svg>`;
   function mount(){
+    if(location.pathname!=='/accounts')window.doubaoAccounts?.hide();
     document.body.classList.add('app-shell');
     let sidebar=document.querySelector('.sidebar,.wb-nav');if(!sidebar){sidebar=document.createElement('aside');document.body.prepend(sidebar);}
     sidebar.className='sidebar app-sidebar';

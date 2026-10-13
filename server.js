@@ -199,6 +199,10 @@ const api = async (req, res, url) => {
   }
   if (route === '/api/doubao' && req.method === 'GET') return reply(res, 200, await provider.doubao.info());
   if (route === '/api/doubao/accounts' && req.method === 'GET') return reply(res, 200, await provider.doubao.accounts());
+  if(route==='/api/doubao/task-records'&&req.method==='GET'){
+    const tasks=await provider.doubao.request('/api/video-tasks');
+    return reply(res,200,tasks.map(t=>Object.fromEntries(['id','account_id','account_name','prompt','status','conversation_id','result_url','error_message','created_at','updated_at'].map(k=>[k,t[k]??'']))));
+  }
   if (route === '/api/doubao/import-session' && req.method === 'POST') return reply(res, 201, await provider.doubao.importSession(await body(req)));
   if (route === '/api/doubao/login-attempts' && req.method === 'POST') return reply(res, 202, await provider.doubao.startLogin());
   const doubaoLoginMatch = /^\/api\/doubao\/login-attempts\/([a-f0-9-]{36})$/i.exec(route);
@@ -460,7 +464,8 @@ http.createServer(async (req, res) => {
     if (url.pathname.startsWith('/api/')) return await api(req, res, url);
     if(req.method==='GET'&&/^\/design-assets\/[a-z0-9-]+\.webp$/.test(url.pathname)){const file=path.join(root,url.pathname.slice(1));if(fs.existsSync(file))return reply(res,200,fs.readFileSync(file),'image/webp');}
     if(req.method==='GET'&&['/studio-ui.js','/studio-ui.css','/replica-design.js','/replica-design.css','/app-shell.js','/app-shell.css'].includes(url.pathname))return reply(res,200,fs.readFileSync(path.join(root,url.pathname.slice(1))),url.pathname.endsWith('.css')?'text/css; charset=utf-8':'text/javascript; charset=utf-8');
-    if(req.method==='GET'&&['/studio','/templates','/works','/assets','/accounts','/settings'].includes(url.pathname))return reply(res,200,fs.readFileSync(path.join(root,'studio.html')),'text/html; charset=utf-8');
+    if(req.method==='GET'&&url.pathname==='/accounts')return reply(res,200,fs.readFileSync(path.join(root,'index.html')),'text/html; charset=utf-8');
+    if(req.method==='GET'&&['/studio','/templates','/works','/assets','/settings'].includes(url.pathname))return reply(res,200,fs.readFileSync(path.join(root,'studio.html')),'text/html; charset=utf-8');
     if(req.method==='GET'&&url.pathname==='/replicate')return reply(res,200,fs.readFileSync(path.join(root,'replica-studio.html')),'text/html; charset=utf-8');
     if(req.method==='GET'&&url.pathname==='/'&&!url.searchParams.has('mode')){res.writeHead(302,{Location:'/studio'});return res.end();}
     if (req.method === 'GET' && ['/workbench-ui.css', '/workbench-ui.js', '/replica-ui.css', '/replica-ui.js', '/subtitle-ui.js', '/video-preview.js', '/image-warehouse.js', '/prompt-inputs.js', '/action-prompts-ui.js', '/video-cards.js', '/template-examples.js', '/generation-history.js'].includes(url.pathname)) return reply(res, 200, fs.readFileSync(path.join(root, url.pathname.slice(1))), url.pathname.endsWith('.css') ? 'text/css; charset=utf-8' : 'text/javascript; charset=utf-8');

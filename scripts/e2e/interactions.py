@@ -148,7 +148,7 @@ with sync_playwright() as pw:
         page.locator('#preferences').click();assert page.locator('#defaultRoute').is_visible()
         passed('设置页连接结果与通用／偏好切换')
         signatures=[]
-        for url in ['/studio','/studio?new=1','/templates','/replicate','/works','/assets','/accounts','/settings']:
+        for url in ['/studio','/studio?new=1','/templates','/replicate','/works','/assets','/settings']:
             page.goto(BASE+url,wait_until='networkidle')
             signatures.append(page.locator('.app-sidebar nav a').evaluate_all('(els)=>els.map(e=>[e.textContent.trim(),e.getAttribute("href")])'))
             assert page.locator('.app-sidebar').count()==1
@@ -156,7 +156,7 @@ with sync_playwright() as pw:
                 page.set_viewport_size({'width':width,'height':950});assert page.evaluate('document.documentElement.scrollWidth<=innerWidth'),(url,width)
             page.set_viewport_size({'width':1473,'height':950})
         assert all(s==signatures[0] for s in signatures)
-        passed('八个主页面导航一致、390至1473宽度无横向溢出')
+        passed('七个制作页面导航一致、390至1473宽度无横向溢出')
         page.goto(BASE+'/legacy?tab=accounts',wait_until='networkidle');page.screenshot(path=str(OUT/'protected-account-pool.png'))
         assert '豆包账号池' in page.locator('body').inner_text()
         passed('受保护的原始豆包账号池页面可加载')
