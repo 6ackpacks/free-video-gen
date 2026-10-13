@@ -90,7 +90,8 @@ export class StudioDomain {
         slotsFor(clean);
         const signature=fingerprint({...clean,prompts:undefined,scriptConfirmed:undefined,...(creative.videoDirection||Object.values(creative.materials).some(v=>v.length)||Object.values(creative.productBrief).some(Boolean)||Object.values(creative.massageSpec).some(Boolean)?{creative}: {})});
         clean.prompts=clean.prompts.slice(0,count);
-        clean.promptsDirty=!!(plan.promptsDirty||previous?.promptsDirty);
+        // Prompt validity belongs to the server; stale editor flags cannot invalidate a completed draft.
+        clean.promptsDirty=!!previous?.promptsDirty;
         if(previous?.signature!==signature){clean.promptsDirty=clean.prompts.length>0;clean.scriptConfirmed=false;}
         return {...clean,signature};
       });

@@ -20,7 +20,7 @@ with sync_playwright() as pw:
             if not value.get('id'):value={'id':str(uuid.uuid4()),'stage':'templates','createdAt':'2026-10-13T00:00:00Z','updatedAt':'2026-10-13T00:00:00Z','trials':[],'submissions':[],**value}
             previous=projects.get(value['id'],{})
             for plan in value['plans']:
-                old=next((p for p in previous.get('plans',[]) if p['id']==plan['id']),{});plan.setdefault('prompts',old.get('prompts',[]));plan.setdefault('snapshot',next(t for t in catalog['templates'] if t['id']==plan['templateId']))
+                old=next((p for p in previous.get('plans',[]) if p['id']==plan['id']),{});plan['prompts']=old.get('prompts',[]);plan['promptsDirty']=old.get('promptsDirty',False);plan.setdefault('snapshot',next(t for t in catalog['templates'] if t['id']==plan['templateId']))
             projects[value['id']]=value;r.fulfill(json=value);return
         m=re.match(r'/api/studio/projects/([^/]+)(?:/(prompts|submit))?$',path)
         if m and m[1] in projects:
@@ -63,7 +63,7 @@ with sync_playwright() as pw:
         page.locator('#avatarMode').select_option('audio-driven');expect(page.locator('#avatarAudioUrl')).to_be_visible();page.locator('#avatarAudioUrl').fill('https://assets.example/voice.mp3');page.wait_for_timeout(650);assert projects[pid]['audioUrl'].endswith('voice.mp3')
         page.locator('#avatarMode').select_option('native');page.wait_for_timeout(650)
         for plan in projects[pid]['plans']:plan['prompts']=['已确认口播'];plan['promptsDirty']=False
-        page.locator('#projectReferenceMode').select_option('reference-image');page.locator('#promptTab').click();page.locator('#trial').click();page.wait_for_url('**/works?project=*')
+        page.reload(wait_until='networkidle');page.locator('#projectReferenceMode').select_option('reference-image');page.locator('#promptTab').click();page.locator('#trial').click();page.wait_for_url('**/works?project=*')
         assert len(submitted)==1 and submitted[0]['generationSettings']['referenceMode']=='reference-image'
         checks.append('数字人口播可创建制作项目；三类素材绑定、文案、保存恢复、配音方式切换与模拟提交')
         page.goto(BASE+'/studio?new=1&group=common:service&industry=jewelry&direction=unboxing-review',wait_until='networkidle');page.locator('#enterProject').click();page.wait_for_selector('#creativeMaterials')

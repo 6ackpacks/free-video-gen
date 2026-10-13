@@ -38,7 +38,7 @@ with sync_playwright() as pw:
             previous=projects.get(value['id'],{})
             for plan in value.get('plans',[]):
                 old=next((v for v in previous.get('plans',[]) if v['id']==plan['id']),{})
-                plan.setdefault('prompts',old.get('prompts',[]));plan.setdefault('rows',[]);plan.setdefault('shotImages',[])
+                plan['prompts']=old.get('prompts',[]);plan['promptsDirty']=old.get('promptsDirty',False);plan.setdefault('rows',[]);plan.setdefault('shotImages',[])
                 plan.setdefault('snapshot',templates[plan['templateId']])
             projects[value['id']]=value;route.fulfill(json=value);return
         match=re.match(r'/api/studio/projects/([^/]+)(?:/(prompts|submit|draft))?$',path)
