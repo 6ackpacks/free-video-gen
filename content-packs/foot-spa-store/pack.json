@@ -15,7 +15,7 @@
     }
   ],
   "actionLibrary": "prompt-skills/foot-spa-video-prompt-skill/actions",
-  "expectedActionCount": 14,
+  "expectedActionCount": 25,
   "policies": {
     "referenceRole": "locked-background",
     "humanReview": ["scene-analysis", "trial-video"],

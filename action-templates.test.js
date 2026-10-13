@@ -13,10 +13,10 @@ const fullScene = {
   sceneTags: ['corridor', 'visible_door', 'visible_card_door', 'nearby_visible_door', 'clear_walkway', 'side_area'], maxPeople: 3
 };
 
-test('loads exactly fourteen stable action templates', () => {
+test('loads exactly twenty-five stable action templates', () => {
   const templates = loadActionTemplates();
-  assert.equal(templates.length, 14);
-  assert.deepEqual(templates.map(x => x.id), Array.from({ length: 14 }, (_, i) => `action-${String(i + 1).padStart(2, '0')}`));
+  assert.equal(templates.length, 25);
+  assert.deepEqual(templates.map(x => x.id), Array.from({ length: 25 }, (_, i) => `action-${String(i + 1).padStart(2, '0')}`));
   assert.ok(templates.every(x => x.actionText && x.endState && x.sceneTags.length));
 });
 
@@ -63,9 +63,10 @@ test('明确刷卡房门可解锁刷卡动作，近处房门仍需连续路线�
 });
 
 test('compiler preserves locked action verbatim and fixed quality and audio', () => {
-  for (const template of templatesWithCompatibility(fullScene)) {
+  for (const template of loadActionTemplates()) {
+    const scene={...fullScene,sceneTags:[...new Set([...fullScene.sceneTags,...template.sceneTags])],maxPeople:5};
     const characters = makeCharacters(template, 3);
-    const output = compilePrompt({ referenceId: 'base-1', sceneProfile: fullScene, template, characters });
+    const output = compilePrompt({ referenceId: 'base-1', sceneProfile: scene, template, characters });
     assert.ok(output.prompt.includes(template.actionText), template.id);
     assert.ok(output.prompt.includes(QUALITY_TEXT));
     assert.ok(output.prompt.includes(AUDIO_TEXT));

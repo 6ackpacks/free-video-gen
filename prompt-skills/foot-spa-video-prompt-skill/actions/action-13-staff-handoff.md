@@ -3,6 +3,7 @@ id: action-13
 name: 出房交接用品后同行
 people: 2
 scene_tags: [corridor, visible_door]
+start_pose: 一名女技师在半开的真实房门内侧可见处，另一名女技师在门外等候，准备交接的小型工作用品由其中一人持有。
 end_state: 两名女技师并肩在走廊行走
 ---
 

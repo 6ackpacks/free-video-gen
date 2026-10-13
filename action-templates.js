@@ -57,12 +57,13 @@ export function loadActionTemplates(directory = actionSkillDirectory, options = 
       characterProfile: String(values.character_profile || 'foot-spa'),
       renderProfile: String(values.render_profile || 'surveillance'),
       sceneTags: Array.isArray(values.scene_tags) ? values.scene_tags : [],
+      startPose: String(values.start_pose || ''),
       endState: String(values.end_state || section(body, '结束状态')),
       actionText, summary: actionText.slice(0, 72) + (actionText.length > 72 ? '…' : ''),
       selectionEnabled: true, source: filename
     };
   });
-  const expectedCount = Number(options.expectedCount || (path.resolve(directory) === path.resolve(actionSkillDirectory) ? 14 : 0));
+  const expectedCount = Number(options.expectedCount || (path.resolve(directory) === path.resolve(actionSkillDirectory) ? 25 : 0));
   if (expectedCount && result.length !== expectedCount) throw new Error(`动作模板必须是 ${expectedCount} 个`);
   if (new Set(result.map(x => x.id)).size !== result.length) throw new Error('动作模板 ID 必须唯一');
   return result;

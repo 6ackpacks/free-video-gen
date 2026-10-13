@@ -3,6 +3,7 @@ id: action-08
 name: 女技师开门并引客进入
 people: 2
 scene_tags: [corridor, visible_door]
+start_pose: 女技师靠近真实房门，男客在她后方，门关闭。
 end_state: 客人与女技师先后进入同一房间
 ---
 

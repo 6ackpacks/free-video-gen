@@ -3,6 +3,7 @@ id: action-07
 name: 女技师刷卡开门并等待
 people: 2
 scene_tags: [corridor, visible_card_door]
+start_pose: 女技师与男客在带真实刷卡器的房门外，门关闭。
 end_state: 房门已打开，两人仍在门外
 ---
 

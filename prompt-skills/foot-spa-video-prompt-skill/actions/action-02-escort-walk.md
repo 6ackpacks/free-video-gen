@@ -3,6 +3,7 @@ id: action-02
 name: 女技师带客人沿走廊同行
 people: 2
 scene_tags: [corridor, clear_walkway]
+start_pose: 女技师在男性客人前半步，两人在走廊近处。
 end_state: 两人仍在走廊向深处行走并远离镜头
 ---
 

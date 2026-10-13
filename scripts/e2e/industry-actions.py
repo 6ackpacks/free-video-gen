@@ -49,7 +49,7 @@ with sync_playwright() as p:
         checks.append('输入新行业、确认通用类型、进入项目、再次打开行业仍可选择')
         page.goto(BASE+'/studio?new=1&group=footspa:monitor',wait_until='networkidle')
         page.locator('#enterProject').click();page.wait_for_selector('#templateGrid')
-        library=page.locator('.more-action-library');expect(library.locator('summary')).to_contain_text('还有 11 个动作')
+        library=page.locator('.more-action-library');expect(library.locator('summary')).to_contain_text('还有 22 个动作')
         library.locator('summary').click();target=library.locator('[data-action-row]').nth(5)
         target.scroll_into_view_if_needed();page.evaluate('window.e2eRow=document.querySelectorAll(".more-action-library [data-action-row]")[5];window.e2eCheckbox=e2eRow.querySelector("input");window.e2eScroll=scrollY;window.e2eId=e2eRow.dataset.actionRow;window.e2eOrdinal=[...document.querySelectorAll("[data-action-row]")].indexOf(e2eRow)')
         target.locator('[data-select]').check()

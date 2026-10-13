@@ -3,6 +3,7 @@ id: action-03
 name: 女技师出房后沿走廊离开
 people: 1
 scene_tags: [corridor, visible_door]
+start_pose: 女技师在真实房门内侧，房门虚掩。
 end_state: 女技师仍在走廊行走
 ---
 

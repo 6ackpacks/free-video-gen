@@ -1,0 +1,352 @@
+{
+  "schemaVersion": 1,
+  "sources": [
+    {
+      "id": "source-01",
+      "title": "真的不想加班谁懂啊",
+      "url": "https://v.douyin.com/uvbcxqTXqu8/"
+    },
+    {
+      "id": "source-02",
+      "title": "每天上班最大的快乐就是看监控了",
+      "url": "https://v.douyin.com/XpY5j4Qc938/"
+    },
+    {
+      "id": "source-03",
+      "title": "这监控该换了，一卡一卡的",
+      "url": "https://v.douyin.com/qCwsV0RcEbQ/"
+    },
+    {
+      "id": "source-04",
+      "title": "又是上班盯着监控的一天",
+      "url": "https://v.douyin.com/6MnSNo9Q-wc/"
+    },
+    {
+      "id": "source-05",
+      "title": "今天上班盯着监控画面",
+      "url": "https://v.douyin.com/HVxvie4lask/"
+    },
+    {
+      "id": "source-06",
+      "title": "不回看监控居然看不见这样的一幕",
+      "url": "https://v.douyin.com/fstI6AUvPKo/"
+    },
+    {
+      "id": "source-07",
+      "title": "又是被安排盯着看监控的一天",
+      "url": "https://v.douyin.com/dCpyr0Suaj0/"
+    },
+    {
+      "id": "source-08",
+      "title": "成年人的解压方式，往往都很简单",
+      "url": "https://v.douyin.com/Nqk0fqM8b-8/"
+    },
+    {
+      "id": "source-09",
+      "title": "盯监控这活我喜欢呀",
+      "url": "https://v.douyin.com/-LvNBqu5ePE/"
+    },
+    {
+      "id": "source-10",
+      "title": "这一幕属实有点出乎我的意料了",
+      "url": "https://v.douyin.com/xC02A8qnkhk/"
+    },
+    {
+      "id": "source-11",
+      "title": "当保安也挺好的，看看监控就下班了",
+      "url": "https://v.douyin.com/isRjaM-7qq4/"
+    },
+    {
+      "id": "source-12",
+      "title": "又是被安排盯监控的一天",
+      "url": "https://v.douyin.com/X6MnNRVKbEo/"
+    },
+    {
+      "id": "source-13",
+      "title": "当保安可太爽了吧",
+      "url": "https://v.douyin.com/tmgHVWzQIYU/"
+    },
+    {
+      "id": "source-14",
+      "title": "我们的日常，今天又是日常的一天",
+      "url": "https://v.douyin.com/F-TG96WT0wI/"
+    },
+    {
+      "id": "source-15",
+      "title": "又是沉浸式盯监控的工作",
+      "url": "https://v.douyin.com/o8l4m2x6keg/"
+    },
+    {
+      "id": "source-16",
+      "title": "上班被罚看监控",
+      "url": "https://v.douyin.com/aY6gnVA40kU/"
+    },
+    {
+      "id": "source-17",
+      "title": "上班工作日常",
+      "url": "https://www.iesdouyin.com/share/video/7688548743272103674/"
+    },
+    {
+      "id": "source-18",
+      "title": "我们的日常，今天又是日常的一天",
+      "url": "https://www.iesdouyin.com/share/video/7687201173493543913/"
+    }
+  ],
+  "clips": [
+    {
+      "id": "clip-01",
+      "title": "背向镜头沿走廊离开",
+      "actionIds": [
+        "action-22"
+      ],
+      "sourceId": "source-07",
+      "sourceMatch": "user-download-order",
+      "duration": 3.9,
+      "originalDuration": 3.9,
+      "sourceKind": "local-video",
+      "note": "按用户确认的下载顺序对应原作；动作已核对关键帧",
+      "group": "走廊",
+      "observation": "背向镜头沿走廊离开"
+    },
+    {
+      "id": "clip-02",
+      "title": "走到门前敲门等待",
+      "actionIds": [
+        "action-01"
+      ],
+      "sourceId": "source-09",
+      "sourceMatch": "user-download-order",
+      "duration": 7.04,
+      "originalDuration": 7.04,
+      "sourceKind": "local-video",
+      "note": "按用户确认的下载顺序对应原作；动作已核对关键帧",
+      "group": "走廊",
+      "observation": "走到门前敲门等待"
+    },
+    {
+      "id": "clip-03",
+      "title": "女技师先入房，男客随后",
+      "actionIds": [
+        "action-16"
+      ],
+      "sourceId": "source-10",
+      "sourceMatch": "user-download-order",
+      "duration": 6.04,
+      "originalDuration": 6.04,
+      "sourceKind": "local-video",
+      "note": "按用户确认的下载顺序对应原作；动作已核对关键帧",
+      "group": "走廊",
+      "observation": "女技师先入房，男客随后"
+    },
+    {
+      "id": "clip-04",
+      "title": "三名女技师依次入房",
+      "actionIds": [
+        "action-18"
+      ],
+      "sourceId": "source-12",
+      "sourceMatch": "user-download-order",
+      "duration": 16.07,
+      "originalDuration": 16.07,
+      "sourceKind": "local-video",
+      "note": "按用户确认的下载顺序对应原作；动作已核对关键帧",
+      "group": "走廊",
+      "observation": "三名女技师依次入房"
+    },
+    {
+      "id": "clip-05",
+      "title": "陪客到门前，女技师先入房",
+      "actionIds": [
+        "action-16"
+      ],
+      "sourceId": "source-11",
+      "sourceMatch": "user-download-order",
+      "duration": 6.01,
+      "originalDuration": 6.01,
+      "sourceKind": "local-video",
+      "note": "按用户确认的下载顺序对应原作；动作已核对关键帧",
+      "group": "走廊",
+      "observation": "陪客到门前，女技师先入房"
+    },
+    {
+      "id": "clip-06",
+      "title": "敲门后独自入房（同动作另存版本）",
+      "actionIds": [
+        "action-15"
+      ],
+      "sourceId": "source-15",
+      "sourceMatch": "user-download-order",
+      "duration": 5.08,
+      "originalDuration": 8.1,
+      "sourceKind": "local-video",
+      "note": "按用户确认的下载顺序对应原作；动作已核对关键帧",
+      "group": "走廊",
+      "observation": "敲门后独自入房（同动作另存版本）"
+    },
+    {
+      "id": "clip-07",
+      "title": "两名女技师门口招呼",
+      "actionIds": [
+        "action-25"
+      ],
+      "sourceId": "source-06",
+      "sourceMatch": "caption",
+      "duration": 5.1,
+      "originalDuration": 5.1,
+      "sourceKind": "local-video",
+      "note": "依据文件标题匹配原作",
+      "group": "走廊",
+      "observation": "两名女技师门口招呼"
+    },
+    {
+      "id": "clip-08",
+      "title": "门口敲门后独自进入",
+      "actionIds": [
+        "action-15"
+      ],
+      "sourceId": "source-05",
+      "sourceMatch": "caption",
+      "duration": 5.08,
+      "originalDuration": 5.08,
+      "sourceKind": "local-video",
+      "note": "依据文件标题匹配原作",
+      "group": "走廊",
+      "observation": "门口敲门后独自进入"
+    },
+    {
+      "id": "clip-09",
+      "title": "三名女技师依次进入",
+      "actionIds": [
+        "action-18"
+      ],
+      "sourceId": "source-04",
+      "sourceMatch": "caption",
+      "duration": 5.09,
+      "originalDuration": 5.09,
+      "sourceKind": "local-video",
+      "note": "依据文件标题匹配原作",
+      "group": "走廊",
+      "observation": "三名女技师依次进入"
+    },
+    {
+      "id": "clip-10",
+      "title": "前台接待，三人经过",
+      "actionIds": [
+        "action-19"
+      ],
+      "sourceId": "source-02",
+      "sourceMatch": "caption",
+      "duration": 5.2,
+      "originalDuration": 5.2,
+      "sourceKind": "local-video",
+      "note": "依据文件标题匹配原作",
+      "group": "前台",
+      "observation": "前台接待，三人经过"
+    },
+    {
+      "id": "clip-11",
+      "title": "女技师与男客沿楼梯上行",
+      "actionIds": [
+        "action-20"
+      ],
+      "sourceId": "source-01",
+      "sourceMatch": "caption",
+      "duration": 3.03,
+      "originalDuration": 3.03,
+      "sourceKind": "local-video",
+      "note": "依据文件标题匹配原作",
+      "group": "楼梯",
+      "observation": "女技师与男客沿楼梯上行"
+    },
+    {
+      "id": "clip-12",
+      "title": "大厅中一人走近，旁侧两人停留",
+      "actionIds": [
+        "action-23"
+      ],
+      "sourceId": "source-03",
+      "sourceMatch": "caption",
+      "duration": 3.93,
+      "originalDuration": 3.93,
+      "sourceKind": "local-video",
+      "note": "依据文件标题匹配原作",
+      "group": "大厅",
+      "observation": "大厅中一人走近，旁侧两人停留"
+    },
+    {
+      "id": "clip-13",
+      "title": "两名女技师并肩走近",
+      "actionIds": [
+        "action-17"
+      ],
+      "sourceId": "source-17",
+      "sourceMatch": "caption",
+      "duration": 5.08,
+      "originalDuration": 5.08,
+      "sourceKind": "local-video",
+      "note": "依据文件标题匹配原作",
+      "group": "走廊",
+      "observation": "两名女技师并肩走近"
+    },
+    {
+      "id": "clip-14",
+      "title": "敲门后独自入房",
+      "actionIds": [
+        "action-15"
+      ],
+      "sourceId": "source-16",
+      "sourceMatch": "caption",
+      "duration": 5.08,
+      "originalDuration": 5.08,
+      "sourceKind": "local-video",
+      "note": "依据文件标题匹配原作",
+      "group": "走廊",
+      "observation": "敲门后独自入房"
+    },
+    {
+      "id": "clip-15",
+      "title": "大厅轻舞，客人经过",
+      "actionIds": [
+        "action-21"
+      ],
+      "sourceId": "source-13",
+      "sourceMatch": "user-download-order",
+      "duration": 7.33,
+      "originalDuration": 7.33,
+      "sourceKind": "local-video",
+      "note": "按用户确认的下载顺序对应原作；动作已核对关键帧",
+      "group": "大厅",
+      "observation": "大厅轻舞，客人经过"
+    },
+    {
+      "id": "clip-16",
+      "title": "女技师先入房，客人跟随",
+      "actionIds": [
+        "action-16"
+      ],
+      "sourceId": "source-08",
+      "sourceMatch": "user-download-order",
+      "duration": 6.06,
+      "originalDuration": 6.06,
+      "sourceKind": "local-video",
+      "note": "按用户确认的下载顺序对应原作；动作已核对关键帧",
+      "group": "走廊",
+      "observation": "女技师先入房，客人跟随"
+    },
+    {
+      "id": "clip-17",
+      "title": "女技师与男客错身离开",
+      "actionIds": [
+        "action-24"
+      ],
+      "sourceId": "source-18",
+      "sourceMatch": "caption",
+      "duration": 6.07,
+      "originalDuration": 6.07,
+      "sourceKind": "local-video",
+      "note": "依据文件标题匹配原作",
+      "group": "走廊",
+      "observation": "女技师与男客错身离开"
+    }
+  ]
+}

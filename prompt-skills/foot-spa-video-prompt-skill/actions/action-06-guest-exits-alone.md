@@ -3,6 +3,7 @@ id: action-06
 name: 男客人独自出房离开
 people: 1
 scene_tags: [corridor, visible_door]
+start_pose: 成年男性客人在真实房门内侧，房门虚掩。
 end_state: 男客人独自在走廊行走
 ---
 

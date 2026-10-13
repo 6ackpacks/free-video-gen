@@ -3,6 +3,7 @@ id: action-14
 name: 陪客人到门前并示意房间
 people: 2
 scene_tags: [corridor, visible_door]
+start_pose: 女技师与男客位于近处真实房门前数步处，门关闭。
 end_state: 两人在门外停留，门保持关闭
 ---
 

@@ -2,7 +2,7 @@ import { FEMALE_CLOTHES, FEMALE_WARDROBE_RULES } from './wardrobe-rules.js';
 import { randomUUID } from 'node:crypto';
 import { compatibility } from './action-templates.js';
 
-export const QUALITY_TEXT = '画面呈现老旧摄像头拍摄质感，固定高位视角全程静止，构图、透视和机位不变；彩色画面轻微模糊，灰蒙蒙一层雾感，低对比，带噪点和视频压缩痕迹，保留底图已有的时间戳与通道编号，不增加新的监控界面或标识。';
+export const QUALITY_TEXT = '固定高位视角全程静止，构图、透视、焦距和机位不变；保持底图真实门店记录质感、清晰度、色彩与光线，允许轻微视频压缩痕迹，不额外添加灰雾或模糊滤镜；保留已有的时间戳与通道编号，不增加新的监控界面或标识。';
 export const AUDIO_TEXT = '全程使用优雅、舒缓、无歌词的纯音乐。人物可以有自然说话嘴型，但音轨中没有可听见的人声、对白、耳语或歌词。';
 export const KTV_QUALITY_TEXT = '严格保持底图空间与固定机位，呈现真实商务 KTV 夜间手机视频质感：霓虹和氛围灯颜色鲜明但不过曝，人物面部可辨，保留轻微低照度噪点和真实运动模糊；不新增底图没有的沙发、屏幕、桌子、麦克风、酒水或房门。';
 export const KTV_AUDIO_TEXT = '配上热闹但不过分嘈杂的 KTV 纯音乐伴奏和轻微现场氛围声；不使用受版权保护的可辨识歌词，不出现清晰对白、辱骂或醉酒喧闹。';

@@ -31,6 +31,7 @@ import { actionPromptRules, promptInputs, rewriteMessages } from './prompt-guida
 import { StoryLibrary, STORY_STRATEGIES, STORY_TEMPLATES } from './story-library.js';
 import {StudioService} from './studio-service.js';
 import {studioApi} from './studio-api.js';
+import {footspaReferenceFile,footspaActionPrompt} from './footspa-reference-library.js';
 import {loadStudioConnections,publicConnections,saveStudioConnections} from './studio-connections.js';
 
 const root = path.dirname(fileURLToPath(import.meta.url));
@@ -105,6 +106,19 @@ const body = async (req, max = 2_000_000) => {
 };
 const api = async (req, res, url) => {
   const route = url.pathname;
+  const footspaMedia=/^\/api\/footspa-references\/(clip-\d{2})\/(video|poster)$/.exec(route);
+  if(footspaMedia&&req.method==='GET'){
+    const file=footspaReferenceFile(root,footspaMedia[1],footspaMedia[2]);
+    if(!file)return reply(res,404,{error:'参考媒体未导入本机，仍可访问已核实的原作链接'});
+    if(footspaMedia[2]==='video')return media.serveLocal(file,{id:footspaMedia[1]},req,res,false);
+    res.writeHead(200,{'Content-Type':'image/jpeg','Cache-Control':'private, max-age=3600'});return fs.createReadStream(file).pipe(res);
+  }
+  if(route==='/api/footspa-prompt'&&req.method==='POST'){
+    const input=await body(req),template=loadActionTemplates().find(t=>t.id===input.actionId);
+    if(!template)throw Error('动作不存在');
+    if(!['9:16','16:9','1:1'].includes(input.ratio||'9:16'))throw Error('画面比例无效');
+    return reply(res,200,{prompt:footspaActionPrompt(template,input),actionId:template.id});
+  }
   if(route==='/api/studio/connections'&&req.method==='GET')return reply(res,200,publicConnections());
   if(route==='/api/studio/connections'&&req.method==='POST'){
     const result=saveStudioConnections(root,await body(req));

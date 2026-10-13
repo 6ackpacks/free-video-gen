@@ -3,6 +3,7 @@ id: action-05
 name: 两名女技师迎面经过
 people: 2
 scene_tags: [corridor, clear_walkway]
+start_pose: 两名女技师分别在走廊两端，面向相反的行走方向。
 end_state: 两人各自继续向相反方向行走
 ---
 

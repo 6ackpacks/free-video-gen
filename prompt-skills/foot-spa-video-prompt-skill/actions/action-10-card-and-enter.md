@@ -3,6 +3,7 @@ id: action-10
 name: 刷卡开门后依次进入
 people: 2
 scene_tags: [corridor, visible_card_door]
+start_pose: 女技师与男客在真实刷卡房门外，房门关闭。
 end_state: 客人与女技师先后进入房间
 ---
 

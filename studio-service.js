@@ -9,6 +9,7 @@ import {DraftTasks} from './draft-tasks.js';
 import {StudioImages} from './studio-images.js';
 import {creativePrompt,creativeErrors} from './studio-creative-inputs.js';
 import {replicaPrompts} from './replica-workflow.js';
+import {footspaReferences,footspaActionPrompt,FOOTSPA_REFERENCE_CATALOG} from './footspa-reference-library.js';
 
 export function studioSeeds(workspace,packs=listContentPacks()) {
   const scenes=packs.map(p=>({id:p.id==='foot-spa-store'?'footspa':p.id==='home-massage'?'massage':p.id==='ktv-business'?'ktv':p.id,name:p.navLabel||p.name,description:p.description,packId:p.id,engine:p.engine}));
@@ -25,7 +26,7 @@ export function studioSeeds(workspace,packs=listContentPacks()) {
 }
 export class StudioService {
   constructor({root,provider,queue,references,workspace,storyLibrary,replicaSources,presentation,media}){
-    Object.assign(this,{provider,queue,references,workspace,storyLibrary,replicaSources,presentation,media});
+    Object.assign(this,{root,provider,queue,references,workspace,storyLibrary,replicaSources,presentation,media});
     const seed=studioSeeds(workspace);this.scenes=seed.scenes;
     this.domain=new StudioDomain(path.join(root,'data','studio.json'),seed.templates);
     for(const template of this.domain.state.templates)if(template.legacyPresetId&&template.version===1&&template.description===template.name&&template.replica?.template){template.description=template.replica.template;template.versions[0].description=template.description;}
@@ -46,7 +47,7 @@ export class StudioService {
     return [...images,...videos,...brands];
   }
   works(){return this.queue.state.jobs.map(j=>({...j,sceneId:j.projectId?j.sceneId:j.packId==='ktv-business'?'ktv':j.packId==='foot-spa-store'?'footspa':j.skillId==='story-ad'?'story':j.skillId==='paired-reference'?'massage':j.sceneId,templateId:j.templateId||(j.actionId?`${j.packId||'historical'}:${j.actionId}`:undefined),templateName:j.templateName||j.actionName||j.skillName||j.actionTemplate?.name||'历史未分类'}));}
-  overview(){const catalog=buildCatalog(this.domain.state.templates,this.domain.state.industries);return {...catalog,scenes:[...this.scenes,...catalog.industries.filter(i=>i.id!=='general'&&!this.scenes.some(s=>s.id===i.id)).map(i=>({...i,description:i.name,engine:'generic'}))],templates:this.domain.state.templates.map(t=>({...t,example:t.packId&&t.actionId?this.presentation.example(t.packId,t.actionId,this.queue.state.jobs):null})),projects:this.domain.state.projects,assets:this.assets(),actionPacks:this.workspace.state.actionPacks||[],imageTasks:this.images.tasks.map(t=>({id:t.id,projectId:t.projectId,createdAt:t.createdAt,status:t.status,items:t.items.map(i=>({id:i.id,name:i.name,status:i.status,error:i.error,providerId:i.providerId,referenceIdResult:i.referenceIdResult}))})),routes:this.provider.routes,keyframeConfigured:this.provider.keyframeConfigured,settings:this.domain.state.settings};}
+  overview(){const catalog=buildCatalog(this.domain.state.templates,this.domain.state.industries);return {...catalog,scenes:[...this.scenes,...catalog.industries.filter(i=>i.id!=='general'&&!this.scenes.some(s=>s.id===i.id)).map(i=>({...i,description:i.name,engine:'generic'}))],templates:this.domain.state.templates.map(t=>({...t,example:t.packId&&t.actionId?this.presentation.example(t.packId,t.actionId,this.queue.state.jobs):null,referenceClips:t.packId==='foot-spa-store'?footspaReferences(this.root,t.actionId):[]})),footspaReferenceClips:footspaReferences(this.root),footspaSources:FOOTSPA_REFERENCE_CATALOG.sources,projects:this.domain.state.projects,assets:this.assets(),actionPacks:this.workspace.state.actionPacks||[],imageTasks:this.images.tasks.map(t=>({id:t.id,projectId:t.projectId,createdAt:t.createdAt,status:t.status,items:t.items.map(i=>({id:i.id,name:i.name,status:i.status,error:i.error,providerId:i.providerId,referenceIdResult:i.referenceIdResult}))})),routes:this.provider.routes,keyframeConfigured:this.provider.keyframeConfigured,settings:this.domain.state.settings};}
   project(id){const p=this.domain.project(id);return {...p,readiness:this.domain.readiness(p,this.provider.routes,this.references),adopted:this.domain.adopted(p,this.queue)};}
   async generate(id,report=()=>{}){
     const p=this.domain.project(id);
@@ -54,14 +55,15 @@ export class StudioService {
     let completed=0;const total=p.plans.reduce((n,v)=>n+v.count,0);
     for(const plan of p.plans){
       const signature=plan.signature;
-      const base=(plan.content||plan.snapshot.description)+'\n已确认动作顺序：'+plan.snapshot.actions.join('；')+'\n'+creativePrompt(p);
+      const monitor=plan.snapshot.packId==='foot-spa-store'&&plan.snapshot.actionTemplate;
+      const baseFor=index=>(monitor?footspaActionPrompt(plan.snapshot.actionTemplate,{duration:plan.duration,ratio:plan.ratio,personImages:!!p.materials?.personImageIds?.length,index}):plan.content||plan.snapshot.description)+'\n已确认动作顺序：'+plan.snapshot.actions.join('；')+'\n'+(plan.content?'用户编辑的动作补充：'+plan.content+'\n':'')+creativePrompt(p)+(monitor&&p.peopleBrief?'\n人物造型补充（不得改变模板人数）：'+p.peopleBrief:'');
       if(plan.snapshot.replica){
         const jobs=replicaPrompts({replica:plan.snapshot.replica,count:plan.count,duration:plan.duration,videoRoute:plan.videoRoute,resolution:plan.resolution,ratio:'9:16',referenceImageIds:[],actionPack:plan.snapshot.actionPack,actionPackId:plan.snapshot.actionPack?.id,creativeBrief:plan.creativeBrief},this.provider.routes.find(r=>r.id===plan.videoRoute));
         const current=this.domain.project(id).plans.find(v=>v.id===plan.id);current.prompts=jobs.prompts.map((j,i)=>j.prompt+(slotsFor(plan)[i].length?'\n附件是本画面的初始图片或主体参考；使用附件中的主体替换原视频对应内容，保留模板的镜头风格和相对节奏。':''));current.promptsDirty=false;this.domain.save();completed+=plan.count;report({completed,total});continue;
       }
       const prompts=[];
       for(let offset=0;offset<plan.count;offset+=10){
-      const result=await this.provider.rewritePrompts({mode:p.scene==='story'?'story':p.scene==='massage'?'paired':'store',creativeBrief:plan.creativeBrief,outputLanguage:'zh',context:{brandName:p.brandName,brandFacts:p.brandFacts,imageRules:plan.snapshot.imageRules,actions:plan.snapshot.actions,duration:plan.duration,sceneEvidence:(plan.imageIds||[]).map(id=>this.references.get(id).sceneProfile),requirements:(p.videoDirection||p.templateTypeId?.endsWith(':avatar-talk'))?'按用户确认的视频方向与文案，在指定时长内输出完整短片提示词；不要覆盖单场景口播或一镜到底约束。':p.scene==='story'?'输出完整脚本和编号分镜；仅用品牌事实，未知信息写待确认。':`单个固定镜头，1–2个自然动作，不改变底图空间。每条人物外貌、自然穿搭、表情和细节有所变化，保持动作一致。${p.scene==='ktv'?'KTV商业氛围，不套用足浴或监控风格。':''}`},items:Array.from({length:Math.min(10,plan.count-offset)},(_,i)=>({id:String(offset+i),prompt:`第${offset+i+1}条，${plan.duration}秒。模板规则：${base}\n人物：${plan.snapshot.people}\n图片要求：${plan.snapshot.imageRules}\n${p.scene==='story'?`宣传主体：${p.brandName}\n已确认资料：${p.brandFacts}\n请生成完整脚本和按时间顺序编号的分镜。`:''}`}))});
+      const result=await this.provider.rewritePrompts({mode:p.scene==='story'?'story':p.scene==='massage'?'paired':'store',creativeBrief:plan.creativeBrief,outputLanguage:'zh',context:{brandName:p.brandName,brandFacts:p.brandFacts,imageRules:plan.snapshot.imageRules,actions:plan.snapshot.actions,duration:plan.duration,sceneEvidence:(plan.imageIds||[]).map(id=>this.references.get(id).sceneProfile),requirements:monitor?'保留给定核心事件、成年人物数量、进入顺序和结束状态；每条一个固定机位连续镜头，按给定时长重写自然动作节奏。用户想法只能调整造型、神态与细节；不改变门的位置、场景类型或结尾。不要额外添加第二个事件。':(p.videoDirection||p.templateTypeId?.endsWith(':avatar-talk'))?'按用户确认的视频方向与文案，在指定时长内输出完整短片提示词；不要覆盖单场景口播或一镜到底约束。':p.scene==='story'?'输出完整脚本和编号分镜；仅用品牌事实，未知信息写待确认。':`单个固定镜头，1–2个自然动作，不改变底图空间。每条人物外貌、自然穿搭、表情和细节有所变化，保持动作一致。${p.scene==='ktv'?'KTV商业氛围，不套用足浴或监控风格。':''}`},items:Array.from({length:Math.min(10,plan.count-offset)},(_,i)=>({id:String(offset+i),prompt:`第${offset+i+1}条，${plan.duration}秒。模板规则：${baseFor(offset+i+1)}\n人物：${plan.snapshot.people}\n图片要求：${plan.snapshot.imageRules}\n${p.scene==='story'?`宣传主体：${p.brandName}\n已确认资料：${p.brandFacts}\n请生成完整脚本和按时间顺序编号的分镜。`:''}`}))});
       prompts.push(...result.items.map(v=>v.prompt));report({completed:completed+prompts.length,total});
       }
       const current=this.domain.project(id).plans.find(v=>v.id===plan.id);

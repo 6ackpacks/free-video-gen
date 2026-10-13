@@ -27,6 +27,8 @@ with sync_playwright() as pw:
         return result
     def routes(route):
         req=route.request; path=req.url.split(BASE)[-1].split('?')[0]
+        if path=='/api/references' and req.method=='GET':
+            route.fulfill(json=[]);return
         if path=='/api/studio' and req.method=='GET':
             route.fulfill(json={**overview,'projects':list(projects.values())}); return
         if path=='/api/studio/projects' and req.method=='POST':

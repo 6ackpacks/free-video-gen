@@ -140,7 +140,7 @@ export class ReferenceLibrary {
     return entry.promise;
   }
   normalizeProfile(value) {
-    const allowed = new Set(['corridor', 'visible_door', 'visible_card_door', 'nearby_visible_door', 'clear_walkway', 'side_area', 'ktv_private_room', 'karaoke_screen', 'microphone', 'sofa_area', 'low_table', 'song_selector', 'clear_floor', 'ktv_lobby', 'reception_desk']);
+    const allowed = new Set(['corridor', 'visible_door', 'visible_card_door', 'nearby_visible_door', 'clear_walkway', 'side_area', 'ktv_private_room', 'karaoke_screen', 'microphone', 'sofa_area', 'low_table', 'song_selector', 'clear_floor', 'ktv_lobby', 'reception_desk', 'lobby', 'stairs']);
     const profile = {
       spaceType: String(value?.spaceType || '').slice(0, 100),
       description: String(value?.description || '').trim().slice(0, 1200),

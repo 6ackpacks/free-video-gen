@@ -3,6 +3,7 @@ id: action-04
 name: 女技师独自经过镜头
 people: 1
 scene_tags: [corridor, clear_walkway]
+start_pose: 女技师位于走廊远处，面向镜头，前方通道畅通。
 end_state: 女技师继续行走并经过画面
 ---
 

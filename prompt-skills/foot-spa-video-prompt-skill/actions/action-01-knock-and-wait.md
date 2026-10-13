@@ -3,6 +3,7 @@ id: action-01
 name: 女技师敲门并等待
 people: 1
 scene_tags: [corridor, visible_door]
+start_pose: 女技师在真实房门外数步处，门关闭。
 end_state: 女技师在门外等待，门保持关闭
 ---
 

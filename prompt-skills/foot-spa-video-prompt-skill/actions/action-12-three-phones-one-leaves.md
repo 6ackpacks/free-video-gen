@@ -3,6 +3,7 @@ id: action-12
 name: 三名女技师看手机其中一人离开
 people: 3
 scene_tags: [corridor, side_area]
+start_pose: 三名女技师在不挡通道的侧区站立，各自拿手机。
 end_state: 一人行走，两人原地看手机
 ---
 

@@ -3,6 +3,7 @@ id: action-11
 name: 客人出房后与女技师并肩离开
 people: 2
 scene_tags: [corridor, visible_door]
+start_pose: 女技师与男客位于真实房门内侧，房门虚掩。
 end_state: 两人仍在走廊并肩行走
 ---
 

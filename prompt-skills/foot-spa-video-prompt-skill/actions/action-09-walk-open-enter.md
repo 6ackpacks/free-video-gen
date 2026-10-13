@@ -3,6 +3,7 @@ id: action-09
 name: 并肩到门前推门进入
 people: 2
 scene_tags: [corridor, nearby_visible_door]
+start_pose: 女技师与男客在近处真实房门前数步处并肩站立。
 end_state: 客人与女技师先后进入房间
 ---
 
