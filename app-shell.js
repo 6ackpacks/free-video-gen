@@ -11,6 +11,12 @@
     const active=page==='/studio'?(params.has('new')||params.has('type')||params.has('project')||params.has('scene')||params.has('template')?'batch':'home'):page==='/replicate'||page==='/clone'?'replicate':['/projects','/works'].includes(page)?'works':page.slice(1);
     sidebar.innerHTML='<a class="brand" href="/studio">帧间</a><nav aria-label="主导航">'+items.map(([id,label,url])=>`<a href="${url}" data-app-nav="${id}" aria-label="${label}" class="${active===id?'active':''}" ${active===id?'aria-current="page"':''}>${icon(id)}<span>${label}</span></a>`).join('')+`</nav><a class="settings-link ${active==='settings'?'active':''}" href="/settings" aria-label="设置">${icon('settings')}<span>设置</span></a>`;
   }
-  window.StudioShell={mount};
+  function openAccounts(){
+    if(document.getElementById('accountsDrawer'))return;const prior=document.body.style.overflow;document.body.style.overflow='hidden';
+    const backdrop=document.createElement('div');backdrop.id='accountsDrawer';backdrop.className='accounts-drawer-backdrop';backdrop.innerHTML='<section class="accounts-drawer" role="dialog" aria-modal="true" aria-label="豆包账号池"><header><strong>豆包账号池</strong><button id="closeAccountsDrawer" aria-label="关闭账号池">× 关闭</button></header><iframe title="豆包账号与会话" src="/accounts?embedded=1"></iframe></section>';document.body.append(backdrop);
+    const close=()=>{window.doubaoAccounts?.hide();backdrop.remove();document.body.style.overflow=prior;document.removeEventListener('keydown',escape);};const escape=e=>{if(e.key==='Escape')close();};backdrop.querySelector('#closeAccountsDrawer').onclick=close;backdrop.onclick=e=>{if(e.target===backdrop)close();};document.addEventListener('keydown',escape);
+  }
+  document.addEventListener('click',e=>{const link=e.target.closest('a[href="/accounts"]');if(!link||location.pathname==='/accounts')return;e.preventDefault();openAccounts();});
+  window.StudioShell={mount,openAccounts};
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',mount,{once:true});else mount();
 })();

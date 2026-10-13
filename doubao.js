@@ -2,6 +2,13 @@ import fs from 'node:fs';
 import { spawnSync } from 'node:child_process';
 
 const timeout = ms => AbortSignal.timeout(ms);
+export const managerTime=value=>value?Date.parse(/[zZ]|[+-]\d\d:\d\d$/.test(value)?value:value+'Z'):0;
+export function accountUnavailableReason(item,now=Date.now()){
+ if(!item.enabled)return '已暂停';if(item.status!=='active')return '登录状态需同步';
+ if(item.video_limited_until&&managerTime(item.video_limited_until)>now)return '服务限额等待至 '+new Date(managerTime(item.video_limited_until)).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai',hour12:false});
+ if(item.video_quota_total!=null&&Number(item.video_quota_used)>=Number(item.video_quota_total))return '今日调度额度已用完';return '';
+}
+
 const originFor = value => {
   const url = new URL(value);
   if (url.protocol !== 'http:' || url.hostname !== '127.0.0.1') throw new Error('豆包管理器地址必须是本机 127.0.0.1');
@@ -55,12 +62,12 @@ export class DoubaoBridge {
     try {
       const session = await this.discover();
       const [accounts, settings] = await Promise.all([this.request('/api/accounts'), this.request('/api/settings')]);
-      const usable = accounts.filter(item => item.enabled && item.status === 'active' && !(item.video_quota_total != null && Number(item.video_quota_used) >= Number(item.video_quota_total)) && !(item.video_limited_until && Date.parse(item.video_limited_until)>Date.now()));
+      const usable = accounts.filter(item => !accountUnavailableReason(item));const reasons=accounts.map(item=>({id:item.id,name:item.display_name||'豆包账号',reason:accountUnavailableReason(item)}));
       return {
-        connected: true, origin: session.origin, accounts: usable.length, accountItems: accounts,
+        connected: true, origin: session.origin, accounts: usable.length, totalAccounts:accounts.length, accountItems: accounts, unavailableAccounts:reasons.filter(a=>a.reason),
         model: this.model, ready: usable.length > 0, maxConcurrency: Number(settings.max_concurrency) || 1,
         dailyQuota: Number(settings.daily_quota) || 5,
-        message: usable.length ? `${usable.length} 个可用账号 · 并发 ${Number(settings.max_concurrency) || 1}` : '没有可用账号，请检查登录状态、暂停和服务额度'
+        message: usable.length ? `${usable.length} 个可用账号 · 并发 ${Number(settings.max_concurrency) || 1}` : accounts.length?`已有 ${accounts.length} 个账号，暂不可调度：${[...new Set(reasons.filter(a=>a.reason).map(a=>a.reason))].join('；')}`:'执行池尚无账号，请在右侧账号池同步本地登录会话'
       };
     } catch (error) { return { connected: false, accounts: 0, ready: false, model: this.model, message: error.message }; }
   }
@@ -74,7 +81,7 @@ export class DoubaoBridge {
   deleteAccount(id) { return this.request(`/api/accounts/${encodeURIComponent(id)}`, { method: 'DELETE' }); }
   async prepareBatch(count) {
     const [accounts, settings] = await Promise.all([this.accounts(), this.settings()]);
-    const usable = accounts.filter(item => item.enabled && item.status === 'active' && Number(item.video_quota_used || 0) < Number(item.video_quota_total || settings.daily_quota || 5));
+    const usable = accounts.filter(item => !accountUnavailableReason(item) && Number(item.video_quota_used || 0) < Number(item.video_quota_total || settings.daily_quota || 5));
     if (!usable.length) throw new Error('没有可用的豆包执行账号，请先在本地窗口登录并同步');
     const desired = Math.max(1, Math.min(10, Math.max(1, Number(count) || 1), usable.length));
     if (Number(settings.max_concurrency) !== desired) await this.updateSettings({ max_concurrency: desired });

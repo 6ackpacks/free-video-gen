@@ -87,6 +87,39 @@ def install_exclusive_account_scheduler(repository) -> None:
     repository.choose_available_account = choose_available_account
 
 
+def install_rate_limit_cooldown(repository) -> None:
+    """An undifferentiated STREAM_ERROR rate limited is not proof of daily exhaustion."""
+    from datetime import UTC, datetime, timedelta
+    from doupool.db.models import Account, AppLog
+    now = datetime.now(UTC).replace(tzinfo=None)
+    quota = int(repository.get_setting('daily_quota', 5))
+    business_date, _ = quota_window_without_tzdata(now, repository.get_setting('quota_reset_time', '00:00'))
+    tasks = repository.list_video_tasks(limit=10000)
+    for account in repository.list_accounts():
+        marker = f'workbench-rate-limit-migration:{account.id}:{business_date}'
+        if repository.get_setting(marker, False) or account.video_quota_used != quota or not account.video_limited_until:
+            continue
+        event = AppLog.select().where((AppLog.account == account.id) & (AppLog.event == 'video_quota_limited')).order_by(AppLog.created_at.desc()).first()
+        if not event or (event.created_at + timedelta(hours=8)).date() != business_date:
+            continue
+        # The old handler wrote used=quota even before a generation was accepted.
+        used = sum(1 for task in tasks if task.account_id == account.id and (task.created_at + timedelta(hours=8)).date() == business_date and (task.conversation_id or task.remote_task_id or task.status == 'succeeded'))
+        if used < quota:
+            Account.update(video_quota_used=used, video_limited_until=None).where(Account.id == account.id).execute()
+        repository.set_setting(marker, True)
+    def mark_limited(account_id, limited_until, daily_quota):
+        # Keep the accepted-task counter. Retry the same queued task after a short cooldown.
+        until = datetime.now(UTC).replace(tzinfo=None) + timedelta(minutes=5)
+        Account.update(video_limited_until=until).where(Account.id == account_id).execute()
+    repository.mark_account_limited = mark_limited
+    original_update = repository.update_video_task
+    def update_task(task_id, **values):
+        if values.get('error_message') == '账号今日额度已用完，正在切换账号':
+            values['error_message'] = '服务暂时限流，5分钟后重新检查可用账号'
+        return original_update(task_id, **values)
+    repository.update_video_task = update_task
+
+
 def recover_interrupted_tasks(repository) -> None:
     """Release accounts left busy when the local desktop process was stopped."""
     for task in repository.list_video_tasks(limit=1000):
@@ -402,6 +435,7 @@ def main() -> None:
     repository = AccountRepository(manager.database)
     recover_interrupted_tasks(repository)
     install_exclusive_account_scheduler(repository)
+    install_rate_limit_cooldown(repository)
     settings_service = SettingsService(repository, settings.data_dir, manager.path)
     login_service = LoginService(
         repository,

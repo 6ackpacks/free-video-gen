@@ -32,7 +32,7 @@ else {
   app.on('second-instance', () => focusWorkbench());
   app.on('open-url', event => { event.preventDefault(); focusWorkbench(); });
 }
-function fitSelected() { for (const [id, view] of views) view.setBounds(id === selectedId ? bounds : { x: 0, y: 0, width: 0, height: 0 }); }
+function fitSelected() { const size=window?.getContentBounds();const clipped={x:Math.max(0,Math.min(bounds.x,size?.width||0)),y:Math.max(0,Math.min(bounds.y,size?.height||0)),width:Math.max(0,Math.min(bounds.width,(size?.width||0)-bounds.x)),height:Math.max(0,Math.min(bounds.height,(size?.height||0)-bounds.y))};for (const [id, view] of views) view.setBounds(id === selectedId ? clipped : { x: 0, y: 0, width: 0, height: 0 }); }
 async function createView(id) {
   if (views.has(id)) return views.get(id);
   if (views.size >= store.state.activeLimit) throw new Error(`最多同时运行 ${store.state.activeLimit} 个账号`);
@@ -47,6 +47,7 @@ async function createView(id) {
   return view;
 }
 async function stopView(id, clear = false) {
+  const accountSession=session.fromPartition(accountPartition(id));if(!clear){accountSession.flushStorageData();await accountSession.cookies.flushStore();}
   const view = views.get(id);
   if (view) { window.contentView.removeChildView(view); view.webContents.close(); views.delete(id); }
   if (selectedId === id) selectedId = '';
@@ -77,6 +78,7 @@ async function syncAccount(id) {
   const response = await view.webContents.executeJavaScript(`fetch('/passport/web/account/info/', { credentials: 'include' }).then(async response => ({ ok: response.ok, status: response.status, payload: await response.json() }))`, true);
   if (!response?.ok) throw new Error(`豆包登录态检查失败（HTTP ${response?.status || 0}）`);
   const accountSession = session.fromPartition(accountPartition(id));
+  accountSession.flushStorageData();await accountSession.cookies.flushStore();
   const cookies = (await accountSession.cookies.get({})).filter(cookie => /(^|\.)doubao\.com$/i.test(String(cookie.domain || '').replace(/^\./, '')));
   const localStorage = await view.webContents.executeJavaScript(`Object.fromEntries(Array.from({ length: localStorage.length }, (_, index) => { const key = localStorage.key(index); return [key, localStorage.getItem(key)] }))`, true);
   const identity = identityFromPayload(response.payload, cookies, localStorage);
@@ -98,7 +100,7 @@ async function syncSavedAccounts() {
     } catch (error) {
       bootLog(`account sync skipped ${account.id}: ${error.message}`);
     } finally {
-      await stopView(account.id).catch(() => {});
+      if(selectedId!==account.id)await stopView(account.id).catch(() => {});
     }
   }
 }
@@ -132,7 +134,7 @@ async function bootstrap() {
     await view.webContents.loadURL('https://www.doubao.com/chat/'+encodeURIComponent(conversationId));return {selectedId:id};
   });
   ipcMain.handle('accounts:set-limit', (_, value) => ({ activeLimit: store.setLimit(value) }));
-  ipcMain.on('accounts:bounds', (_, value) => { bounds = { x: Math.max(0, Math.round(value.x)), y: Math.max(0, Math.round(value.y)), width: Math.max(1, Math.round(value.width)), height: Math.max(1, Math.round(value.height)) }; fitSelected(); });
+  ipcMain.on('accounts:bounds', (_, value) => { bounds = { x: Math.max(0, Math.round(value.x)), y: Math.max(0, Math.round(value.y)), width: Math.max(0, Math.round(value.width)), height: Math.max(0, Math.round(value.height)) }; fitSelected(); });
   ipcMain.on('accounts:hide', () => { selectedId = ''; fitSelected(); });
   await window.loadURL(`http://127.0.0.1:${process.env.PORT}/`);
   bootLog('window loaded');
@@ -141,4 +143,6 @@ async function bootstrap() {
 }
 
 if (singleInstance) app.whenReady().then(bootstrap).catch(error => { bootLog(`boot failed: ${error.stack || error}`); app.quit(); });
+let quitFlushed=false;
+app.on('before-quit',event=>{if(quitFlushed)return;event.preventDefault();Promise.all((store?.state.accounts||[]).map(async account=>{const saved=session.fromPartition(accountPartition(account.id));saved.flushStorageData();await saved.cookies.flushStore();})).catch(error=>bootLog('session save failed: '+error.message)).finally(()=>{quitFlushed=true;app.quit();});});
 app.on('window-all-closed', () => app.quit());
