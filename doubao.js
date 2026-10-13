@@ -5,7 +5,7 @@ const timeout = ms => AbortSignal.timeout(ms);
 export const managerTime=value=>value?Date.parse(/[zZ]|[+-]\d\d:\d\d$/.test(value)?value:value+'Z'):0;
 export function accountUnavailableReason(item,now=Date.now()){
  if(!item.enabled)return '已暂停';if(item.status!=='active')return '登录状态需同步';
- if(item.video_limited_until&&managerTime(item.video_limited_until)>now)return '服务限额等待至 '+new Date(managerTime(item.video_limited_until)).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai',hour12:false});
+ if(item.video_limited_until&&managerTime(item.video_limited_until)>now)return '旧发送接口未确认接收，等待重新检查至 '+new Date(managerTime(item.video_limited_until)).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai',hour12:false});
  if(item.video_quota_total!=null&&Number(item.video_quota_used)>=Number(item.video_quota_total))return '今日调度额度已用完';return '';
 }
 
@@ -122,7 +122,7 @@ export class DoubaoBridge {
     const tasks = await this.taskSnapshot.pending;
     const task = tasks.find(item => item.id === id);
     if (!task) throw new Error('豆包任务不存在');
-    const status = task.status === 'succeeded' ? 'complete' : ['failed', 'cancelled'].includes(task.status) ? 'error' : task.status === 'queued' ? 'waiting' : 'running';
+    const status = task.status==='needs_review'?'needs_review':task.status === 'succeeded' ? 'complete' : ['failed', 'cancelled'].includes(task.status) ? 'error' : task.status === 'queued' ? 'waiting' : 'running';
     const urls = [...new Set([task.result_url, task.backup_result_url, task.fallback_result_url].filter(url=>/^https:\/\//i.test(url||'')))];
     return { status, outputs: urls.map(url=>({url})), error: status === 'error' ? (task.error || task.error_message || '豆包任务已停止') : '', progress: { accountId: task.account_id || '', accountName: task.account_name || '', conversationId: task.conversation_id || '', stage: task.status, message: task.error || task.error_message || '' } };
   }

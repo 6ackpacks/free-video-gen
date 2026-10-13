@@ -136,7 +136,7 @@ async function bootstrap() {
   ipcMain.handle('accounts:set-limit', (_, value) => ({ activeLimit: store.setLimit(value) }));
   ipcMain.on('accounts:bounds', (_, value) => { bounds = { x: Math.max(0, Math.round(value.x)), y: Math.max(0, Math.round(value.y)), width: Math.max(0, Math.round(value.width)), height: Math.max(0, Math.round(value.height)) }; fitSelected(); });
   ipcMain.on('accounts:hide', () => { selectedId = ''; fitSelected(); });
-  await window.loadURL(`http://127.0.0.1:${process.env.PORT}/`);
+  await window.loadURL(`http://127.0.0.1:${process.env.PORT}/studio`);
   bootLog('window loaded');
   setTimeout(() => syncSavedAccounts().catch(error => bootLog(`account sync failed: ${error.message}`)), 500);
   window.on('closed', () => { window = null; });

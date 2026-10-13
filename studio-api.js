@@ -20,6 +20,8 @@ export async function studioApi(service,req,res,url,{body,reply}) {
   const template=/^\/api\/studio\/templates\/([^/]+)$/.exec(route);
   if(template&&req.method==='PATCH'){const t=domain.template(decodeURIComponent(template[1]));t.archived=!!(await body(req)).archived;domain.save();return send(t);}
   if(route==='/api/studio/projects'&&req.method==='POST')return send(domain.saveProject(await body(req)));
+  const flow=/^\/api\/studio\/projects\/([^/]+)\/monitor-workflow(?:\/(confirm|retry|settings))?$/.exec(route);
+  if(flow){if(req.method==='GET')return send(service.monitorWorkflow.get(flow[1]));if(req.method!=='POST')throw Error('不支持的工作线操作');const input=await body(req);if(flow[2]==='settings')return send(service.monitorWorkflow.configure(flow[1],input));if(flow[2]==='confirm')return send(service.monitorWorkflow.confirm(flow[1]));if(flow[2]==='retry')return send(await service.monitorWorkflow.retry(flow[1],input.slotId,input.externalId));return send(service.monitorWorkflow.create(flow[1],input));}
   const project=/^\/api\/studio\/projects\/([^/]+)(?:\/(prompts|submit|adopt|draft))?$/.exec(route);
   if(project){
     const p=domain.project(project[1]);
@@ -67,6 +69,16 @@ export async function studioApi(service,req,res,url,{body,reply}) {
       const result=await service.provider.status(externalId,current);current.providerId=externalId;Object.assign(current,result);queue.save();return send(current);
     }
     if(current.providerId){const result=await service.provider.status(current.providerId,current);if(result.status!=='error'){Object.assign(current,result);queue.save();return send(current);}}
+    const retryInput=await body(req);
+    if(retryInput.useProjectSettings&&current.projectId){
+      if(current.status!=='error')throw Error('只能重试已明确失败的任务');
+      const p=domain.project(current.projectId),plan=p.plans.find(v=>v.id===current.planId),index=current.slotIndex||0;
+      if(!plan||index>=plan.count)throw Error('原视频动作已移除，请创建新的制作计划');
+      const ids=service.jobs(p,{planId:plan.id,index});
+      const errors=domain.readiness({...p,plans:[{...plan,count:1,mapping:'one-to-one',imageIds:ids[0]?.referenceImageIds||[],prompts:[plan.prompts[index]]}]},service.provider.routes,service.references).errors;
+      if(errors.length)throw Error(errors.join('；'));
+      const {id,...settings}=ids[0];Object.assign(current,settings);
+    }
     return send(queue.retry(current.id));
   }
   if(route==='/api/studio/settings'&&req.method==='POST'){const input=await body(req);if(input.paused!==undefined)domain.state.settings.paused=!!input.paused;if(input.defaultRoute&&service.provider.routes.some(r=>r.id===input.defaultRoute&&r.configured))domain.state.settings.defaultRoute=input.defaultRoute;domain.save();return send(domain.state.settings);}

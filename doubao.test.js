@@ -100,4 +100,4 @@ test('豆包短剧把多张选中的参考图作为真实图片附件提交并�
  }finally{fs.rmSync(dir,{recursive:true,force:true})}
 });
 
-test('账号存在但限流时给出真实原因，管理器UTC时间不能被当作本地时间',()=>{assert.equal(managerTime('2026-10-14T16:00:00'),Date.parse('2026-10-14T16:00:00Z'));const item={enabled:true,status:'active',video_quota_used:5,video_quota_total:5,video_limited_until:'2026-10-14T16:00:00'};assert.match(accountUnavailableReason(item,Date.parse('2026-10-14T12:00:00Z')),/服务限额等待/);assert.equal(accountUnavailableReason({...item,video_limited_until:null,video_quota_used:0}),'');});
+test('账号存在但限流时给出真实原因，管理器UTC时间不能被当作本地时间',()=>{assert.equal(managerTime('2026-10-14T16:00:00'),Date.parse('2026-10-14T16:00:00Z'));const item={enabled:true,status:'active',video_quota_used:5,video_quota_total:5,video_limited_until:'2026-10-14T16:00:00'};assert.match(accountUnavailableReason(item,Date.parse('2026-10-14T12:00:00Z')),/未确认接收/);assert.equal(accountUnavailableReason({...item,video_limited_until:null,video_quota_used:0}),'');});

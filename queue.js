@@ -165,6 +165,7 @@ export class VideoQueue {
     job.error = '';
     job.previousProviderIds ||= []; if(job.providerId)job.previousProviderIds.push(job.providerId);
     job.providerId = null;
+    if(job.providerProgress){job.previousProviderProgress=[...(job.previousProviderProgress||[]),job.providerProgress];delete job.providerProgress;}
     job.draftAttempts = 0;
     job.roundAttempts = 0;
     job.nextAt = 0;

@@ -5,6 +5,7 @@ import {StudioDomain, slotsFor} from './studio-domain.js';
 import {listContentPacks, contentPackActionDirectory} from './content-packs.js';
 import {loadActionTemplates, templatesWithCompatibility} from './action-templates.js';
 import {STORY_TEMPLATES} from './story-library.js';
+import {MonitorWorkflow} from './monitor-workflow.js';
 import {DraftTasks} from './draft-tasks.js';
 import {StudioImages} from './studio-images.js';
 import {creativePrompt,creativeErrors} from './studio-creative-inputs.js';
@@ -32,6 +33,7 @@ export class StudioService {
     for(const template of this.domain.state.templates)if(template.legacyPresetId&&template.version===1&&template.description===template.name&&template.replica?.template){template.description=template.replica.template;template.versions[0].description=template.description;}
     for(const seedTemplate of seed.templates)if(seedTemplate.actionPack){const t=this.domain.state.templates.find(t=>t.id===seedTemplate.id);if(t?.version===1&&t.actionPack===undefined){t.actionPack=structuredClone(seedTemplate.actionPack);t.versions[0].actionPack=structuredClone(seedTemplate.actionPack);}}
     this.drafts=new DraftTasks(path.join(root,'data','studio-drafts.json'),(input,report)=>this.generate(input.projectId,report,input.mode));
+    this.monitorWorkflow=new MonitorWorkflow(path.join(root,'data','monitor-workflows.json'),this);
     this.images=new StudioImages(path.join(root,'data','studio-image-tasks.json'),this);
     queue.studioSettings=this.domain.state.settings;
     for(const job of queue.state.jobs.filter(j=>j.projectId&&j.isTrial&&j.slotFingerprint)){

@@ -359,7 +359,7 @@ class ConfirmingVideoRunner:
                 if response["status"] != 200:
                     raise RuntimeError(f"豆包提交接口返回 HTTP {response['status']}")
                 first_ack = browser.parse_sse_ack(response["text"])
-                update(status="starting", error_message="已提交图片和提示词，等待豆包生成方案")
+                update(status="starting", error_message="已提交图片和提示词，等待豆包生成方案", **first_ack)
 
                 # Doubao's current UI answers with a video plan first. Give that
                 # response time to settle, then explicitly accept it in the same chat.
