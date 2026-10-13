@@ -55,8 +55,21 @@ with sync_playwright() as pw:
         assert page.locator('.more-action-library').count()==0
         assert page.locator('#templateGrid .action-description p').count()==0
         assert page.locator('#templateGrid [data-action-prompt]').count()==0
-        assert page.locator('[data-action-group=references] .douyin-origin-link').count()==17
+        assert page.locator('[data-action-group=references] .douyin-origin-link').count()==12
         for a in page.locator('[data-action-group=references] .douyin-origin-link').all():assert a.get_attribute('target')=='_blank'
+        for action in page.locator('[data-action-group=references] [data-action-row]').all():
+            template=next(t for t in catalog['templates'] if t['id']==action.get_attribute('data-action-row'))
+            ref=next(c for c in template['referenceClips'] if c.get('posterUrl') and c.get('videoUrl') and c.get('source'))
+            expect(action.locator('.douyin-origin-link')).to_have_count(1)
+            assert action.locator('.douyin-origin-link').get_attribute('href')==ref['source']['url']
+            assert action.locator('.action-visual img').get_attribute('src')==ref['posterUrl']
+        matching=page.locator('[data-action-row="footspa:action-16"]');matching.locator('.action-visual').click()
+        expect(page.locator('#modal .reference-clip')).to_have_count(1)
+        expected=next(t for t in catalog['templates'] if t['id']=='footspa:action-16')['referenceClips'][0]
+        assert page.locator('#modal video').get_attribute('src')==expected['videoUrl']
+        assert page.locator('#modal .douyin-origin-link').get_attribute('href')==expected['source']['url']
+        page.locator('#modal .close').click()
+        checks.append('每个动作只有1个原作入口，封面、预览视频和原作链接指向同一参考')
         refs=page.locator('[data-action-group=references]');others=page.locator('[data-action-group=other]')
         assert refs.bounding_box()['y']<others.bounding_box()['y']
         page.screenshot(path=str(OUT/'visible-action-library.png'))
