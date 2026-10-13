@@ -4,7 +4,7 @@ from playwright.sync_api import sync_playwright,expect
 BASE=os.environ.get('E2E_BASE_URL','http://127.0.0.1:4192');OUT=Path('data/e2e-production-feedback');OUT.mkdir(exist_ok=True)
 with sync_playwright() as p:
  b=p.chromium.launch();ctx=b.new_context(viewport={'width':1500,'height':940});page=ctx.new_page();page.set_default_timeout(8000);errors=[];checks=[];page.on('pageerror',lambda e:errors.append(str(e)))
- catalog=page.request.get(BASE+'/api/studio').json();project=catalog['projects'][0];jobs=[]
+ catalog=page.request.get(BASE+'/api/studio').json();project=next(v for v in catalog['projects'] if v.get('commonImageId') and v['plans'] and not v.get('submissions'));jobs=[]
  ctx.add_init_script("""window.accountSelections=[];window.accountBounds=[];window.doubaoAccounts={list:async()=>({accounts:[{id:'local-a',name:'测试账号',nickname:'测试账号',managerAccountId:'remote-a',status:'running'}]}),select:async id=>accountSelections.push(id),conversation:async(id,chat)=>accountSelections.push(id+':'+chat),setBounds:r=>accountBounds.push(r),hide:()=>{},sync:async()=>({manager:{display_name:'测试账号'}})};""")
  def route(r):
   req=r.request;path=req.url.split(BASE)[-1].split('?')[0]
@@ -17,7 +17,7 @@ with sync_playwright() as p:
  ctx.route('**/api/**',route)
  try:
   page.goto(BASE+'/studio?type=footspa%3Amonitor&project='+project['id'],wait_until='networkidle')
-  expect(page.locator('#projectProductionStatus')).to_contain_text('视频尚未提交');expect(page.locator('#projectProductionStatus')).to_contain_text('底图：1 张已生成');checks.append('真实最新项目明确区分底图成功和视频未提交')
+  expect(page.locator('#projectProductionStatus')).to_contain_text('视频尚未提交');expect(page.locator('#projectProductionStatus')).to_contain_text('底图：1 张已生成');checks.append('真实已有底图项目明确区分底图成功和视频未提交')
   jobs=[{'id':'job-a','projectId':project['id'],'templateId':'footspa:action-01','templateName':'女技师敲门并等待','sceneId':'footspa','status':'error','error':'生成服务拒绝，请检查账号额度','createdAt':'2026-10-13T12:00:00Z','duration':5,'outputs':[],'prompt':'测试提示词'}]
   page.goto(BASE+'/works?project='+project['id']+'&submitted=1',wait_until='networkidle');expect(page.locator('#workResultStatus')).to_contain_text('视频生成失败');expect(page.locator('#workResultStatus')).to_contain_text('检查账号额度');page.screenshot(path=str(OUT/'failure-feedback.png'))
   jobs[0]['status']='waiting';jobs[0]['error']='';page.reload(wait_until='networkidle');expect(page.locator('#workResultStatus')).to_contain_text('视频任务正在处理');expect(page.locator('#workResultStatus')).to_contain_text('提交成功不代表视频已经生成')

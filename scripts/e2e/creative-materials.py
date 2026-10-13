@@ -59,13 +59,11 @@ with sync_playwright() as pw:
         page.locator('[data-product-field=name]').fill('银色项链');expect(page.locator('#generatePrompts')).to_be_enabled()
         page.screenshot(path=str(OUT/'avatar-inputs.png'),full_page=False)
         page.reload(wait_until='networkidle');expect(page.locator('[data-product-field=name]')).to_have_value('银色项链');expect(page.locator('#creativeMaterials .role-thumbs img')).to_have_count(4)
-        assert page.locator('#projectVideoRoute').input_value()==''
+        assert page.locator('#projectVideoRoute').input_value()=='wan-tokendance'
         page.locator('#avatarMode').select_option('audio-driven');expect(page.locator('#avatarAudioUrl')).to_be_visible();page.locator('#avatarAudioUrl').fill('https://assets.example/voice.mp3');page.wait_for_timeout(650);assert projects[pid]['audioUrl'].endswith('voice.mp3')
         page.locator('#avatarMode').select_option('native');page.wait_for_timeout(650)
         for plan in projects[pid]['plans']:plan['prompts']=['已确认口播'];plan['promptsDirty']=False
-        page.locator('#promptTab').click();page.locator('#trial').click();f=page.locator('#submitParameters')
-        for key,value in [('videoRoute','wan-tokendance'),('ratio','9:16'),('resolution','720P'),('referenceMode','reference-image')]:f.locator('[name='+key+']').select_option(value)
-        f.locator('[type=submit]').click();page.wait_for_selector('#confirmSubmit');page.locator('#confirmSubmit').click();page.wait_for_url('**/works?project=*')
+        page.locator('#projectReferenceMode').select_option('reference-image');page.locator('#promptTab').click();page.locator('#trial').click();page.wait_for_url('**/works?project=*')
         assert len(submitted)==1 and submitted[0]['generationSettings']['referenceMode']=='reference-image'
         checks.append('数字人口播可创建制作项目；三类素材绑定、文案、保存恢复、配音方式切换与模拟提交')
         page.goto(BASE+'/studio?new=1&group=common:service&industry=jewelry&direction=unboxing-review',wait_until='networkidle');page.locator('#enterProject').click();page.wait_for_selector('#creativeMaterials')

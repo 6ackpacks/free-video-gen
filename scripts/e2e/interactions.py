@@ -86,7 +86,7 @@ with sync_playwright() as pw:
         page.goto(BASE+'/studio?project='+project_id,wait_until='networkidle')
         passed('不存在的模板入口报错且不创建空项目')
         page.locator('[data-select]').nth(0).check();page.locator('[data-select]').nth(1).check();page.locator('[data-select]').nth(2).check()
-        expect(page.locator('#generatePrompts')).to_be_disabled()
+        expect(page.locator('#generatePrompts')).to_be_enabled()
         for i,count in enumerate([5,3,2]):page.locator('[data-action-row]').nth(i).locator('[data-field=count]').fill(str(count))
         page.locator('#projectVideoRoute').select_option('wan-tokendance');page.locator('#projectRatio').select_option('16:9');page.locator('#projectResolution').select_option('720P');page.locator('#projectReferenceMode').select_option('first-frame')
         page.locator('#commonAssets').click();assert page.locator('[data-common-id]').count()==1
@@ -95,7 +95,7 @@ with sync_playwright() as pw:
         assert all(p['imageIds']==['e2e-image'] for p in projects[project_id]['plans'])
         expect(page.locator('#actionSummary')).to_contain_text('共 10 条视频')
         page.reload(wait_until='networkidle');expect(page.locator('[data-select]:checked')).to_have_count(3)
-        assert page.locator('#projectVideoRoute').input_value()==''
+        assert page.locator('#projectVideoRoute').input_value()=='wan-tokendance'
         passed('三个动作5/3/2共10条、只可选已确认素材、保存恢复与参数重选')
         page.locator('[data-images]').first.click();page.locator('[data-image-source=materials]').click()
         page.locator('#mapping').select_option('one-to-one')
@@ -109,34 +109,17 @@ with sync_playwright() as pw:
         for plan in projects[project_id]['plans']:
             plan['prompts']=[plan['snapshot']['name']+'已确认测试文案']*plan['count'];plan['promptsDirty']=False
         page.reload(wait_until='networkidle');page.locator('#promptTab').click()
-        def choose_trial():
-            page.locator('#trial').click();form=page.locator('#submitParameters')
-            assert form.locator('[name=videoRoute]').input_value()==''
-            expect(form.locator('[type=submit]')).to_be_disabled()
-            form.locator('[name=videoRoute]').select_option('wan-tokendance');form.locator('[name=ratio]').select_option('16:9');form.locator('[name=resolution]').select_option('720P')
-            expect(form.locator('[type=submit]')).to_be_disabled()
-            form.locator('[name=referenceMode]').select_option('first-frame');form.locator('[type=submit]').click();page.wait_for_selector('#confirmSubmit')
-        page.locator('#trial').click();page.locator('#modal .close').click();assert not submissions
-        fail_submit=True;choose_trial();page.locator('#confirmSubmit').click()
-        expect(page.locator('#toast')).to_contain_text('模拟服务暂不可用');expect(page.locator('#confirmSubmit')).to_be_enabled()
-        fail_submit=False;page.locator('#confirmSubmit').click();page.wait_for_url('**/works?project=*')
+        fail_submit=True;page.locator('#trial').click()
+        expect(page.locator('#toast')).to_contain_text('模拟服务暂不可用');expect(page.locator('#trial')).to_be_enabled()
+        assert page.locator('#submitParameters').count()==0 and page.locator('#confirmSubmit').count()==0
+        fail_submit=False;page.locator('#trial').click();page.wait_for_url('**/works?project=*')
         assert submissions[-1]['trial'] and submissions[-1]['generationSettings']['ratio']=='16:9'
         assert submissions[-1]['requestId']==submissions[-2]['requestId']
-        page.goto(BASE+'/studio?project='+project_id,wait_until='networkidle')
-        if page.locator('#promptTab').is_visible():page.locator('#promptTab').click()
-        page.locator('#trial').click()
-        assert page.locator('#submitParameters [name=videoRoute]').input_value()=='';page.locator('#modal .close').click()
-        passed('试片取消、完整参数确认、失败可重试、同请求去重标识、下次重新选择')
+        passed('预设参数直接提交；失败可重试且同请求去重；无重复参数或确认弹窗')
         page.goto(BASE+'/templates',wait_until='networkidle')
         projects[project_id]['plans'][0]['duration']=6
         page.goto(BASE+'/studio?project='+project_id,wait_until='networkidle')
-        page.locator('#trial').click();form=page.locator('#submitParameters')
-        form.locator('[name=videoRoute]').select_option('apimart');form.locator('[name=ratio]').select_option('9:16')
-        resolution=form.locator('[name=resolution] option').nth(1).get_attribute('value')
-        form.locator('[name=resolution]').select_option(resolution);form.locator('[name=referenceMode]').select_option('first-frame')
-        form.locator('[type=submit]').click();page.wait_for_selector('#confirmSubmit')
-        assert page.locator('#trialSlot option').count()==5
-        page.locator('#modal .close').click()
+        page.locator('#templateTab').click();page.locator('#projectVideoRoute').select_option('apimart');page.locator('#promptTab').click();assert page.locator('#trialSlot option').count()==5
         passed('试片可单独选择支持的动作，其他动作时长不阻挡单条试片')
         page.goto(BASE+'/assets',wait_until='networkidle');page.locator('#assetSearch').fill('不存在');expect(page.locator('#assetGrid .card')).to_have_count(0)
         page.locator('#assetSearch').fill('');page.locator('[data-asset-check=e2e-image]').check()

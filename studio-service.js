@@ -90,10 +90,10 @@ export class StudioService {
     if(this.domain.state.requests[requestId])return this.domain.state.requests[requestId];
     const prior=this.queue.state.jobs.find(j=>j.studioRequestId===requestId);
     if(prior)return this.queue.state.batches.find(b=>b.id===prior.batchId);
-    if(p.templateTypeId){
+    if(p.templateTypeId&&input.generationSettings){
       const selection=input.generationSettings;
-      if(!selection||['videoRoute','ratio','resolution','referenceMode'].some(key=>!selection[key]))throw Error('每次生成前必须选择并确认生成参数');
-      if(p.plans.some(plan=>['videoRoute','ratio','resolution','referenceMode'].some(key=>plan[key]!==selection[key])))throw Error('生成参数与项目计划不一致，请重新确认');
+      if(!selection||['videoRoute','ratio','resolution','referenceMode'].some(key=>!selection[key]))throw Error('生成预设不完整，请检查项目设置');
+      if(p.plans.some(plan=>['videoRoute','ratio','resolution','referenceMode'].some(key=>!(key==='ratio'&&selection[key]==='auto')&&plan[key]!==selection[key])))throw Error('生成参数与项目计划不一致，请重新确认');
     }
     let validationProject=p;
     if(input.trial){
