@@ -20,11 +20,11 @@ export function footspaReferenceFile(root,id,kind){
   const file=path.join(root,'data','footspa-references',id+(kind==='video'?'.mp4':'.jpg'));
   return fs.existsSync(file)?file:null;
 }
-export function footspaKeyframePrompt(template,{ratio='9:16',personImages=false,index=1}={}){
+export function footspaKeyframePrompt(template,{ratio='9:16',personImages=false,index=1,monitorFrame=false}={}){
   const start=template.startPose||loadActionTemplates().find(a=>a.id===template.id)?.startPose;
   const identities=personImages?'优先保持上传的对应成年人物面容和穿搭，未提供参考的角色使用自然得体造型。':makeCharacters(template,index).map((c,i)=>`人物${i+1}：${c.appearance}，${c.clothing}。`).join('');
   const scene=template.sceneTags.includes('stairs')?'可见台阶与连续扶手的门店楼梯':template.sceneTags.includes('reception_desk')?'真实门店前台和连续通道':template.sceneTags.includes('lobby')?'真实门店大厅和可用活动区域':'真实门店走廊';
-  return `${ratio}画幅，真实摄影，固定高位俯拍的静态视频首帧。场景为${scene}；有场景底图时保持原有构图、门的位置、通道、装修、光线与物件，不重建布局。画面严格包含${template.people}位成年人。${identities}\n只表现动作尚未完成的起始状态：${start}。双脚落在真实地面或台阶上，手部自然，保留必要的可行走路线。人物参考提供身份，不能把肖像背景当成门店；不复制参考图中多余的人。只生成这一张起始画面，不做故事板或拼图，不画动作轨迹、结尾画面、字幕或水印。`;
+  return `${ratio}画幅，真实摄影，固定高位俯拍的模拟监控视角静态视频首帧。场景为${scene}；${monitorFrame?'附件已是监控首帧，锁定原有构图、机位、门与通道位置。':'附件仅作真实门店场景参考，把平拍视角重构为墙角高位固定监控机位，轻微广角；保持装修、门与通道的相对布局、光线与物件，不照搬原平拍机位。'}保持画面清晰，不添加假时间戳、监控边框、噪点或模糊滤镜。画面严格包含${template.people}位成年人。${identities}\n只表现动作尚未完成的起始状态：${start}。双脚落在真实地面或台阶上，手部自然，保留必要的可行走路线。人物参考提供身份，不能把肖像背景当成门店；不复制参考图中多余的人。只生成这一张起始画面，不做故事板或拼图，不画动作轨迹、结尾画面、字幕或水印。`;
 }
 export function footspaActionPrompt(template,{duration=6,ratio='9:16',personImages=false,index=1}={}){
   const seconds=Number(duration);if(!Number.isFinite(seconds)||seconds<2||seconds>15)throw Error('动作时长须为2–15秒');

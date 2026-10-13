@@ -12,6 +12,7 @@ python scripts/e2e/production-feedback.py
 python scripts/e2e/generation-presets.py
 python scripts/e2e/prompt-production.py
 python scripts/e2e/project-library.py
+python scripts/e2e/product-audit.py
 ```
 
 Set `E2E_BASE_URL` if the server uses a port other than 4192. The application must have the normal built-in catalogs and the video-route configurations used by these scenarios. No external generation service is invoked: project/material/template writes and video submissions are intercepted inside each browser context. Server domain and provider-request behavior is tested separately with `npm test`.
@@ -27,3 +28,5 @@ Generation presets verifies direct submission without parameter/confirmation dia
 Prompt production verifies empty drafts cannot submit, generated text appears progressively, production stays disabled while drafting, completed prompts enable production, and retained dirty prompts require explicit confirmation. Drafts and video submissions are simulated.
 
 Project library checks historical and empty projects, search, association of generated and uploaded images, image inspection, project video status and actual output counts, explicit refresh, project-only versus all works, and responsive layouts. Only read requests and browser fixtures are used.
+
+The independent product audit verifies editable video settings in place, TokenDance model changes, monitor-view reminders and confirmation, returning from image preparation to its source step, and local retry of failed image/video tasks. No real provider generation occurs.

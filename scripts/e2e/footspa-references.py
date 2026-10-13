@@ -90,8 +90,8 @@ with sync_playwright() as pw:
         for width in [1500,1100,760,520,390]:
             page.set_viewport_size({'width':width,'height':940});assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
         page.set_viewport_size({'width':1500,'height':940});page.screenshot(path=str(OUT/'production.png'))
-        assert page.locator('#prepareActionPrompts').is_enabled();assert page.locator('#generatePrompts').is_enabled()
-        page.locator('#prepareActionPrompts').click();page.wait_for_selector('[data-prompt]');expect(page.locator('[data-prompt]')).to_have_count(3)
+        assert page.locator('#generatePrompts').is_enabled()
+        page.locator('#generatePrompts').click();page.wait_for_selector('[data-prompt]');expect(page.locator('[data-prompt]')).to_have_count(3)
         with page.expect_download() as pending:page.locator('#exportProjectPrompts').click()
         pending.value.save_as(OUT/'project-prompts.md')
         checks.append('25模板验收与全部导出；8秒和人物身份切换；无底图无视频参数也能走独立提示词生成与导出流程（文本任务为模拟）')

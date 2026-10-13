@@ -28,7 +28,7 @@ export async function studioApi(service,req,res,url,{body,reply}) {
       const input=await body(req);
       if(project[2]==='draft'){
         const existing=service.drafts.tasks.find(t=>t.projectId===p.id&&t.status==='running');if(existing)return send(existing);
-        const task=service.drafts.create({projectId:p.id,requestId:input.requestId});task.projectId=p.id;p.promptTaskId=task.id;p.stage='prompts';domain.save();service.drafts.save();return send(task);
+        const task=service.drafts.create({projectId:p.id,requestId:input.requestId,mode:['missing','dirty'].includes(input.mode)?input.mode:'all'});task.projectId=p.id;p.promptTaskId=task.id;p.stage='prompts';domain.save();service.drafts.save();return send(task);
       }
       if(project[2]==='submit')return send(service.submit({...input,projectId:p.id}));
       if(project[2]==='prompts'){
@@ -53,7 +53,7 @@ export async function studioApi(service,req,res,url,{body,reply}) {
   if(asset&&req.method==='PATCH'){
     const input=await body(req);if(!service.assets().some(a=>a.id===asset[1]))throw Error('素材不存在');
     const metadata=domain.state.assets[asset[1]]||{};
-    for(const key of ['confirmed','archived','favorite','scene','role'])if(input[key]!==undefined)metadata[key]=input[key];
+    for(const key of ['confirmed','archived','favorite','scene','role','monitorView'])if(input[key]!==undefined)metadata[key]=input[key];
     domain.state.assets[asset[1]]=metadata;domain.save();return send(metadata);
   }
   if(route==='/api/studio/works'&&req.method==='GET')return send(service.works());

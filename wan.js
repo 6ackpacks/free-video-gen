@@ -28,7 +28,7 @@ export function createWanProvider({ id, name, keyPrefix, submitUrl, tasksBaseUrl
       const images = imageMode === 'reference-image' && job.referenceImageUrls?.length ? job.referenceImageUrls : (job.referenceImageUrl ? [job.referenceImageUrl] : []);
       if (images.length) input.media = images.map(url => ({ type: imageMode === 'reference-image' ? 'reference_image' : 'first_frame', url }));
       const payload = { model: 'wan3.0-video', input, parameters: {
-        resolution: normalizeResolution(job.resolution), ratio: imageMode === 'first-frame' && job.referenceImageUrl ? 'adaptive' : (job.ratio || '9:16'),
+        resolution: normalizeResolution(job.resolution), ratio: imageMode === 'first-frame' && job.referenceImageUrl && job.autoRatio!==false ? 'adaptive' : (job.ratio || '9:16'),
         duration: normalizeDuration(job.duration), audio: !!job.nativeAudio||shouldGenerateAudio(job.prompt), watermark: false, prompt_extend: false, seed: normalizeSeed(job.seed)
       } };
       const data = await request(submitUrl, { method: 'POST', headers: { 'X-DashScope-Async': 'enable' }, body: JSON.stringify(payload) }, 60000);
