@@ -31,6 +31,7 @@ import { actionPromptRules, promptInputs, rewriteMessages } from './prompt-guida
 import { StoryLibrary, STORY_STRATEGIES, STORY_TEMPLATES } from './story-library.js';
 import {StudioService} from './studio-service.js';
 import {studioApi} from './studio-api.js';
+import {desktopAccountState} from './desktop-accounts.js';
 import {footspaReferenceFile,footspaActionPrompt} from './footspa-reference-library.js';
 import {loadStudioConnections,publicConnections,saveStudioConnections} from './studio-connections.js';
 
@@ -198,6 +199,8 @@ const api = async (req, res, url) => {
     catch (error) { return reply(res, 200, { connected: false, error: error.message }); }
   }
   if (route === '/api/doubao' && req.method === 'GET') return reply(res, 200, await provider.doubao.info());
+  if(route==='/api/desktop/accounts'&&req.method==='GET')return reply(res,200,desktopAccountState());
+  if(route==='/api/desktop/accounts/open'&&req.method==='POST'){const input=await body(req);if(!desktopAccountState().accounts.some(a=>a.id===input.id))throw Error('本地账号不存在');if(!globalThis.workbenchOpenAccount)throw Error('请先启动桌面工作台，再打开登录会话');await globalThis.workbenchOpenAccount(input.id);return reply(res,200,{opened:true});}
   if (route === '/api/doubao/accounts' && req.method === 'GET') return reply(res, 200, await provider.doubao.accounts());
   if(route==='/api/doubao/task-records'&&req.method==='GET'){
     const tasks=await provider.doubao.request('/api/video-tasks');
@@ -462,8 +465,9 @@ http.createServer(async (req, res) => {
     if (!['GET', 'HEAD'].includes(req.method) && req.headers.origin && req.headers.origin !== `http://127.0.0.1:${port}`) return reply(res, 403, { error: '仅允许从本地工作台提交请求' });
     const url = new URL(req.url, `http://127.0.0.1:${port}`);
     if (url.pathname.startsWith('/api/')) return await api(req, res, url);
+    if(req.method==='GET'&&url.pathname==='/design-assets/frame-logo.svg')return reply(res,200,fs.readFileSync(path.join(root,'design-assets/frame-logo.svg')),'image/svg+xml');
     if(req.method==='GET'&&/^\/design-assets\/[a-z0-9-]+\.webp$/.test(url.pathname)){const file=path.join(root,url.pathname.slice(1));if(fs.existsSync(file))return reply(res,200,fs.readFileSync(file),'image/webp');}
-    if(req.method==='GET'&&['/studio-ui.js','/monitor-workspace.js','/studio-ui.css','/replica-design.js','/replica-design.css','/app-shell.js','/app-shell.css'].includes(url.pathname))return reply(res,200,fs.readFileSync(path.join(root,url.pathname.slice(1))),url.pathname.endsWith('.css')?'text/css; charset=utf-8':'text/javascript; charset=utf-8');
+    if(req.method==='GET'&&['/studio-ui.js','/monitor-workspace.js','/monitor-studio.js','/monitor-ui-state.js','/monitor-studio.css','/studio-ui.css','/replica-design.js','/replica-design.css','/app-shell.js','/app-shell.css'].includes(url.pathname))return reply(res,200,fs.readFileSync(path.join(root,url.pathname.slice(1))),url.pathname.endsWith('.css')?'text/css; charset=utf-8':'text/javascript; charset=utf-8');
     if(req.method==='GET'&&url.pathname==='/accounts')return reply(res,200,fs.readFileSync(path.join(root,'index.html')),'text/html; charset=utf-8');
     if(req.method==='GET'&&['/studio','/templates','/projects','/works','/assets','/settings'].includes(url.pathname))return reply(res,200,fs.readFileSync(path.join(root,'studio.html')),'text/html; charset=utf-8');
     if(req.method==='GET'&&url.pathname==='/replicate')return reply(res,200,fs.readFileSync(path.join(root,'replica-studio.html')),'text/html; charset=utf-8');

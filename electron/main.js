@@ -112,6 +112,8 @@ async function bootstrap() {
     : app.setAsDefaultProtocolClient('video-workbench');
   bootLog(`launch protocol ${protocolRegistered ? 'registered' : 'unavailable'}`);
   store = new AccountStore(app.getPath('userData'));
+  globalThis.workbenchAccountState=()=>store.list(running());
+  globalThis.workbenchOpenAccount=async id=>{store.get(id);focusWorkbench();await window.webContents.executeJavaScript(`window.StudioShell.openAccounts(${JSON.stringify(id)})`,true);};
   await import('../server.js');
   bootLog('local server imported');
   window = new BrowserWindow({ autoHideMenuBar: true, width: 1500, height: 940, minWidth: 1100, minHeight: 720, backgroundColor: '#f3f0e9', title: '帧间 · 视频工作台', webPreferences: { preload: path.join(here, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true } });
