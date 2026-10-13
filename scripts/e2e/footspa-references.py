@@ -51,8 +51,17 @@ with sync_playwright() as pw:
         page.locator('.reference-source-list summary').click();expect(page.locator('.reference-source-list>a')).to_have_count(18)
         assert all(a.get_attribute('target')=='_blank' and 'noopener' in a.get_attribute('rel') for a in page.locator('.reference-source-list>a').all())
         page.locator('#modal .close').click();checks.append('17视频全部浏览器解码成功；仅外链参考保持相同卡片布局；18抖音入口可用')
-        page.locator('.more-action-library summary').click()
-        row=page.locator('[data-action-row="footspa:action-16"]');row.locator('[data-action-prompt]').click()
+        expect(page.locator('[data-action-row]')).to_have_count(25)
+        assert page.locator('.more-action-library').count()==0
+        assert page.locator('#templateGrid .action-description p').count()==0
+        assert page.locator('#templateGrid [data-action-prompt]').count()==0
+        assert page.locator('[data-action-group=references] .douyin-origin-link').count()==17
+        for a in page.locator('[data-action-group=references] .douyin-origin-link').all():assert a.get_attribute('target')=='_blank'
+        refs=page.locator('[data-action-group=references]');others=page.locator('[data-action-group=other]')
+        assert refs.bounding_box()['y']<others.bounding_box()['y']
+        page.screenshot(path=str(OUT/'visible-action-library.png'))
+        row=page.locator('[data-action-row="footspa:action-16"]')
+        page.locator('#reviewFootspaPrompts').click();page.locator('[data-review-prompt="footspa:action-16"]').click()
         expect(page.locator('#footspaPromptText')).to_have_value(re.compile('女技师先进入，客人随后进入'))
         expect(page.locator('#footspaPromptText')).to_have_value(re.compile('未提供人物图'))
         page.locator('#previewPromptDuration').select_option('8');expect(page.locator('#footspaPromptText')).to_have_value(re.compile('8秒'))

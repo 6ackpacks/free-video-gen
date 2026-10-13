@@ -49,21 +49,21 @@ with sync_playwright() as p:
         checks.append('输入新行业、确认通用类型、进入项目、再次打开行业仍可选择')
         page.goto(BASE+'/studio?new=1&group=footspa:monitor',wait_until='networkidle')
         page.locator('#enterProject').click();page.wait_for_selector('#templateGrid')
-        library=page.locator('.more-action-library');expect(library.locator('summary')).to_contain_text('还有 22 个动作')
-        library.locator('summary').click();target=library.locator('[data-action-row]').nth(5)
-        target.scroll_into_view_if_needed();page.evaluate('window.e2eRow=document.querySelectorAll(".more-action-library [data-action-row]")[5];window.e2eCheckbox=e2eRow.querySelector("input");window.e2eScroll=scrollY;window.e2eId=e2eRow.dataset.actionRow;window.e2eOrdinal=[...document.querySelectorAll("[data-action-row]")].indexOf(e2eRow)')
+        library=page.locator('#templateGrid');expect(library.locator('[data-action-row]')).to_have_count(25);expect(library.locator('[data-action-group=references] header')).to_contain_text('抖音参考动作')
+        target=library.locator('[data-action-row]').nth(5)
+        target.scroll_into_view_if_needed();page.evaluate('window.e2eRow=document.querySelectorAll("#templateGrid [data-action-row]")[5];window.e2eCheckbox=e2eRow.querySelector("input");window.e2eScroll=scrollY;window.e2eId=e2eRow.dataset.actionRow;window.e2eOrdinal=[...document.querySelectorAll("[data-action-row]")].indexOf(e2eRow)')
         target.locator('[data-select]').check()
         assert page.evaluate('e2eRow.isConnected && e2eCheckbox.isConnected && e2eCheckbox.checked')
         assert page.evaluate('[...document.querySelectorAll("[data-action-row]")].indexOf(e2eRow)===e2eOrdinal')
         assert page.evaluate('Math.abs(scrollY-e2eScroll)<3')
-        assert library.get_attribute('open') is not None
+        assert page.locator('.more-action-library').count()==0
         target.locator('[data-field=count]').fill('3');page.wait_for_timeout(650)
         assert next(reversed(projects.values()))['plans'][0]['count']==3
         target.locator('[data-select]').uncheck();assert page.evaluate('e2eRow.isConnected&&!e2eCheckbox.checked')
         target.locator('[data-select]').check();target.locator('.action-visual').click();expect(page.locator('#modal')).to_be_visible();page.locator('#modal .close').click()
-        page.locator('#projectVideoRoute').select_option('wan-tokendance');assert page.locator('.more-action-library').get_attribute('open') is not None
+        page.locator('#projectVideoRoute').select_option('wan-tokendance');assert page.locator('[data-action-row]').count()==25
         page.screenshot(path=str(OUT/'action-library.png'),full_page=False)
-        checks.append('完整动作库强引导；勾选不替换行、不重排、不滚动；展开状态与数量保存；预览可用')
+        checks.append('完整动作库默认可见，参考优先；勾选不替换行、不重排、不滚动；数量保存；预览可用')
         for width in [1500,1100,760,520,390]:
             page.set_viewport_size({'width':width,'height':940});assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
         checks.append('动作区390至1500宽度无横向溢出')
