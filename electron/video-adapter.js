@@ -2,7 +2,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {randomUUID} from 'node:crypto';
 const pause=ms=>new Promise(resolve=>setTimeout(resolve,ms));
-export function createNativeVideoAdapter({store,createView,openAccount,directory}) {
+export function createNativeVideoAdapter({store,createView,openAccount,directory,wait=pause}) {
+ const pause=wait;
  const file=path.join(directory,'desktop-video-tasks.json'),tasks=fs.existsSync(file)?JSON.parse(fs.readFileSync(file,'utf8')):[];
  const persist=()=>{fs.writeFileSync(file+'.tmp',JSON.stringify(tasks,null,2));fs.renameSync(file+'.tmp',file);};
  for(const t of tasks)if(!['complete','error'].includes(t.status)){t.status='needs_review';t.error='工作台已重启，请核对原会话，不自动重复发送';}persist();
@@ -17,9 +18,15 @@ export function createNativeVideoAdapter({store,createView,openAccount,directory
  }
  async function run(task,account){
   try {
-   await openAccount(account.id);const view=await createView(account.id);
-   await load(view,'https://www.doubao.com/chat/');await pause(2500);
-   const fresh=await view.webContents.executeJavaScript(`(()=>{const b=[...document.querySelectorAll('button')].find(b=>(b.innerText+' '+b.getAttribute('aria-label')).includes('新对话'));if(!b)return false;b.click();return true;})()`,true);if(!fresh)throw Error('未找到新对话入口，不能安全创建视频');await pause(1500);if(/\/chat\/\d+/.test((await state(view)).url))throw Error('新对话尚未建立，停止发送以免混入旧会话');
+   const view=await createView(account.id);
+   await load(view,'https://www.doubao.com/chat/');
+   let ready=false,requestedFresh=false;const readyUntil=Date.now()+30000;
+   while(Date.now()<readyUntil){const page=await state(view);if(page.captcha){task.status='verification_required';task.message='需要安全验证，请从任务记录打开账号池完成';persist();await pause(1000);continue;}
+    const inputReady=await view.webContents.executeJavaScript(`(()=>[...document.querySelectorAll('[contenteditable="true"],textarea')].some(e=>e.getClientRects().length))()`,true);
+    if(inputReady&&!/\/chat\/\d+/.test(page.url)){ready=true;break;}
+    if(inputReady&&!requestedFresh){requestedFresh=await view.webContents.executeJavaScript(`(()=>{const b=[...document.querySelectorAll('button,[role="button"],a')].find(b=>b.getClientRects().length&&/新对话|新聊天|开启新对话/.test([b.innerText,b.getAttribute('aria-label'),b.getAttribute('title'),b.getAttribute('data-testid')].join(' ')));if(!b)return false;b.click();return true;})()`,true);}await pause(500);
+   }
+   if(!ready)throw Error('未发送：新会话输入区未就绪，请检查登录或页面加载状态');
    const initial=await state(view);const oldVideos=new Set(initial.videos);
    if(task.imagePaths.length){
     const debug=view.webContents.debugger;debug.attach('1.3');try{const doc=await debug.sendCommand('DOM.getDocument');const input=await debug.sendCommand('DOM.querySelector',{nodeId:doc.root.nodeId,selector:'input[type=file]'});if(!input.nodeId)throw Error('豆包上传入口尚未加载');await debug.sendCommand('DOM.setFileInputFiles',{nodeId:input.nodeId,files:task.imagePaths});}finally{debug.detach();}await pause(5000);

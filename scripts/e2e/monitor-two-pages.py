@@ -15,7 +15,7 @@ with sync_playwright() as pw:
  png=base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aZ1cAAAAASUVORK5CYII=')
  poster=next(c['posterUrl'] for t in catalog['templates'] for c in t.get('referenceClips',[]) if c.get('posterUrl'))
  png=page.request.get(BASE+poster).body()
- transforms=[]
+ transforms=[];image_state='running'
  def route(r):
   global flow,project,jobs
   req=r.request;path=req.url.split(BASE)[-1].split('?')[0]
@@ -24,6 +24,10 @@ with sync_playwright() as pw:
   if path.startswith('/mock-frame/'):r.fulfill(content_type='image/png',body=png);return
   if path=='/api/studio':r.fulfill(json=catalog);return
   if path=='/api/studio/works':r.fulfill(json=jobs);return
+  if path=='/api/studio/images' and req.method=='POST':r.fulfill(json={'id':'image-feedback','status':'running','items':[{'id':'image-item','status':'queued'}]});return
+  if path=='/api/studio/image-tasks/image-feedback':
+   if image_state=='complete' and not any(a['id']=='new-ai-image' for a in catalog['assets']):catalog['assets'].append({'id':'new-ai-image','type':'generated','confirmed':False,'projectId':'mock-line','name':'AI新底图','previewUrl':'/mock-frame/new-ai-image'})
+   r.fulfill(json={'id':'image-feedback','status':image_state,'items':[{'id':'image-item','status':image_state,'referenceIdResult':'new-ai-image' if image_state=='complete' else ''}]});return
   if path=='/api/studio/projects/mock-line':r.fulfill(json=project);return
   if path=='/api/studio/projects':
    project=copy.deepcopy(req.post_data_json);catalog['projects']=[project];r.fulfill(json=project);return
@@ -91,6 +95,9 @@ with sync_playwright() as pw:
   expect(page.locator('[data-prompt]')).to_have_count(1);expect(page.locator('#studioCompletedPrompts')).to_be_visible();page.locator('[data-prompt]').first.fill('成片后人工修改');page.locator('h1').click();page.wait_for_timeout(800);expect(page.locator('[data-prompt]').first).to_have_value('成片后人工修改')
   page.locator('#studioTransform').click();expect(page.locator('#studioUseOriginal')).to_have_text('✓ 采用这张底图');expect(page.locator('.studio-image-thumb')).to_have_count(3);assert len(transforms)==1
   page.locator('#studioUseOriginal').click();page.wait_for_timeout(3200);expect(page.locator('#studioUseOriginal')).to_have_text('✓ 直接使用原图');assert next(a for a in catalog['assets'] if a['id']=='processed')['confirmed'];assert all(any(a['id']==u['id'] for a in catalog['assets']) for u in uploads)
+  assert page.locator('.app-sidebar [data-app-nav=assets]').count()==0
+  page.locator('#studioGenerateImage').click();expect(page.locator('#studioImagePreview .studio-image-loading')).to_be_visible();expect(page.locator('#studioImagePreview')).to_contain_text('正在生成AI底图');page.screenshot(path=str(OUT/'image-loading.png'),full_page=True)
+  image_state='complete';expect(page.locator('#studioImagePreview .studio-image-loading')).to_have_count(0);expect(page.locator('.studio-image-thumb')).to_have_count(4);assert 'new-ai-image' in project['materials']['sceneImageIds'];assert not next(a for a in catalog['assets'] if a['id']=='new-ai-image')['confirmed']
   page.set_viewport_size({'width':390,'height':844});page.wait_for_timeout(500);assert page.evaluate('document.documentElement.scrollWidth<=innerWidth');page.screenshot(path=str(OUT/'production-mobile.png'),full_page=True)
   assert not errors,errors
   print(json.dumps({'checks':['两页导航与选择保留','双图上传预览与素材缩略图','原图直接复用多条视频，不强制生图','选择模型后一次提交，提示词后台自动准备','成片之前不显示提示词，成片之后可编辑并保存','同页视频提交失败重试及稳定播放器','手机无横向溢出'],'paidRequests':0,'pageErrors':errors},ensure_ascii=False))

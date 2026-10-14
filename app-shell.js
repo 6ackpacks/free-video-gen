@@ -22,7 +22,6 @@
     ["replicate", "爆款复刻", "/replicate"],
     ["templates", "模板中心", "/templates"],
     ["works", "项目", "/projects"],
-    ["assets", "我的素材", "/assets"],
     ["accounts", "豆包账号池", "/accounts"],
   ];
   const icon = (id) =>

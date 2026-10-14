@@ -68,6 +68,10 @@ export function renderMonitorStudio(ctx) {
   const showCandidate = async (id) => {
     if (handledImages.has(id)) return;
     if (!asset(id)) await refreshData();
+    if (!p.materials.sceneImageIds.includes(id)) {
+      p.materials.sceneImageIds.push(id);
+      await saveProject();
+    }
     pendingImage = id;
     selectedImage = id;
     handledImages.add(id);
@@ -104,6 +108,18 @@ export function renderMonitorStudio(ctx) {
     processingMode = mode;
     localStorage.setItem("monitor:processing:" + p.id, mode);
   };
+  function drawImageLoading() {
+    const preview=app.querySelector('#studioImagePreview');if(!preview)return;
+    preview.querySelector('.studio-image-loading')?.remove();
+    const task=processingMode==='image'?imageTask:processingMode==='transform'?transformTask:processingMode==='variants'?flow:null;
+    const item=processingMode==='image'?task?.items?.[0]:task;
+    const busy=actionBusy||item&&!['complete','error','needs_review','images_ready','ready'].includes(item.status);
+    const error=item?.status==='error';if(!busy&&!error)return;
+    const title=error?'底图生成失败':processingMode==='transform'?'正在加工监控视角':processingMode==='variants'?'正在生成动作底图':'正在生成AI底图';
+    const stage=error?item.error||task.error||'请查看下方失败原因':item?.status==='downloading'?'画面已生成，正在保存到项目':item?.status==='queued'?'任务已收到，正在排队':'正在等待生成服务返回图片';
+    const panel=document.createElement('div');panel.className='studio-image-loading'+(error?' failed':'');panel.setAttribute('role','status');panel.innerHTML=`${error?'<b class="studio-loading-icon">!</b>':'<i class="studio-loading-spinner"></i>'}<strong>${esc(title)}</strong><p>${esc(stage)}</p>${error?'<button id="studioPreviewRetry">重试这张底图</button>':'<div class="studio-loading-track"><i></i></div><small>完成后自动保存到本项目 · 可离开后回来查看</small>'}`;preview.append(panel);
+    panel.querySelector('button')?.addEventListener('click',()=>app.querySelector('#studioRetryImage')?.click());
+  }
   const refreshData = async () => {
     data = await api("/studio");
     ctx.updateCatalog(data);
@@ -328,6 +344,7 @@ export function renderMonitorStudio(ctx) {
     app.querySelector("#studioTransform").disabled = !current || actionBusy;
     app.querySelector("#studioUseOriginal").disabled = !current;
     app.querySelector("#studioVariants").disabled = actionBusy;
+    drawImageLoading();
     app
       .querySelector("#studioLargeImage")
       ?.addEventListener("click", () =>
@@ -569,6 +586,7 @@ export function renderMonitorStudio(ctx) {
       drafting ||
       !trialPlan ||
       !imageReady(trialPlan, data.assets);
+    drawImageLoading();
   }
   async function upload(role) {
     const input = document.createElement("input");
@@ -754,12 +772,14 @@ export function renderMonitorStudio(ctx) {
           requestId: crypto.randomUUID(),
         });
         localStorage.setItem("monitor:image-task:" + p.id, imageTask.id);
+        drawImageLoading();
         message("正在按模板生成底图，自动包含监控视角要求。");
       } catch (e) {
         message("底图未生成：" + e.message);
       } finally {
         actionBusy = false;
         updateButtons();
+        drawImageLoading();
       }
     };
     app.querySelector("#studioVariants").onclick = async () => {
@@ -1014,6 +1034,7 @@ export function renderMonitorStudio(ctx) {
               message(e.message);
             }
           });
+        drawImageLoading();
       }
       const transformId =
         transformTask?.id || localStorage.getItem("monitor:transform:" + p.id);

@@ -58,6 +58,7 @@ export class StudioImages {
     references.items.find(r=>r.id===ref.id).studioImageItemId=item.id;references.save();
     domain.state.assets[ref.id]={confirmed:false,type:'generated',monitorView:task.monitor===true,scene:task.scene,templateId:task.templateId,templateVersion:task.templateVersion,generationDescription:item.prompt,projectId:task.projectId,providerId:item.providerId,role:item.referenceId?'reference-derived':'initial-image'};domain.save();
     item.referenceIdResult=ref.id;item.status='complete';item.error='';delete item.resultUrl;
+    const project=domain.state.projects.find(p=>p.id===task.projectId);if(project){project.materials||={sceneImageIds:[],personImageIds:[],productImageIds:[]};project.materials.sceneImageIds||=[];if(!project.materials.sceneImageIds.includes(ref.id))project.materials.sceneImageIds.push(ref.id);domain.save();}
   }
   summarize(task){const items=task.items||[];task.result={imageIds:items.filter(i=>i.referenceIdResult).map(i=>i.referenceIdResult)};if(items.every(i=>i.status==='complete'))task.status='complete';else if(items.every(i=>['complete','error','needs_review'].includes(i.status))){task.status='error';task.error=items.filter(i=>i.error).map(i=>i.error).join('；');}else task.status='running';}
 }

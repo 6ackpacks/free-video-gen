@@ -24,6 +24,7 @@ process.env.PORT ||= '4173';
 
 let window; let store; let selectedId = ''; let bounds = { x: 420, y: 62, width: 1000, height: 800 };
 const views = new Map();
+const executionViews = new Map();
 const running = () => new Set(views.keys());
 const accountPartition = id => `persist:doubao-account-${id}`;
 const focusWorkbench = () => { if (window && !window.isDestroyed()) { if (window.isMinimized()) window.restore(); window.show(); window.focus(); } };
@@ -115,7 +116,9 @@ async function bootstrap() {
   store = new AccountStore(app.getPath('userData'));
   globalThis.workbenchAccountState=()=>store.list(running());
   globalThis.workbenchOpenAccount=async id=>{store.get(id);focusWorkbench();await window.webContents.executeJavaScript(`window.StudioShell.openAccounts(${JSON.stringify(id)})`,true);};
-  const nativeVideo=createNativeVideoAdapter({store,createView,openAccount:async id=>{selectedId=id;await createView(id);await globalThis.workbenchOpenAccount(id);fitSelected();},directory:app.getPath('userData')});
+  const createExecutionView=async id=>{const prior=executionViews.get(id);if(prior&&!prior.isDestroyed())return prior;const account=store.get(id);const accountSession=session.fromPartition(accountPartition(id));await accountSession.setProxy(account.proxy?{proxyRules:account.proxy}:{mode:'system'});const view=new BrowserWindow({show:false,width:1280,height:900,title:'豆包后台执行',webPreferences:{partition:accountPartition(id),sandbox:true,contextIsolation:true,nodeIntegration:false,backgroundThrottling:false}});view.webContents.setWindowOpenHandler(()=>({action:'deny'}));view.webContents.on('will-navigate',(e,url)=>{if(!/^https:\/\//.test(url))e.preventDefault();});executionViews.set(id,view);return view;};
+  app.once('before-quit',()=>{for(const view of executionViews.values())if(!view.isDestroyed())view.destroy();});
+  const nativeVideo=createNativeVideoAdapter({store,createView:createExecutionView,openAccount:async id=>{selectedId=id;await createView(id);await globalThis.workbenchOpenAccount(id);fitSelected();},directory:app.getPath('userData')});
   globalThis.workbenchNativeVideo=nativeVideo;
   await import('../server.js');
   bootLog('local server imported');
@@ -145,7 +148,7 @@ async function bootstrap() {
   await window.loadURL(`http://127.0.0.1:${process.env.PORT}/studio`);
   bootLog('window loaded');
   setTimeout(() => syncSavedAccounts().catch(error => bootLog(`account sync failed: ${error.message}`)), 500);
-  window.on('closed', () => { window = null; });
+  window.on('closed', () => { window = null; app.quit(); });
 }
 
 if (singleInstance) app.whenReady().then(bootstrap).catch(error => { bootLog(`boot failed: ${error.stack || error}`); app.quit(); });

@@ -90,6 +90,7 @@ test('A07 底图任务去重、保存待确认素材与生成版本，不伪造�
   await new Promise(r=>setTimeout(r,5));const item=task.items[0];assert.equal(item.providerId,'external');await manager.advance(task,item);manager.summarize(task);
   assert.equal(task.status,'complete');assert.equal(stored.length,1);assert.equal(domain.state.assets.asset.confirmed,false);assert.equal(domain.state.assets.asset.templateVersion,1);assert.match(domain.state.assets.asset.generationDescription,/起始底图/);
   domain.state.assets.asset.confirmed=true;assert.equal(stored.length,1);
+  assert.ok(domain.project(p.id).materials.sceneImageIds.includes('asset'),'生成结果自动归入项目，不要求先采用');
 });
 test('A12 只试所选画面，其他模板未准备不会阻止这一条试片',t=>{
   const {domain}=fixture(t),p=domain.saveProject({scene:'footspa',plans:[plan('a'),{...plan('b',3),imageIds:[]} ]});p.plans[0].prompts=['prompt'];const queue={state:{jobs:[],batches:[]},enqueue(jobs){const batch={id:'trial-batch',count:jobs.length};this.state.jobs.push(...jobs);this.state.batches.push(batch);return batch;}};

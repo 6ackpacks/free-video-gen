@@ -1,6 +1,7 @@
 export function primaryReference(template) {
   const clips = template?.referenceClips || [];
   return (
+    clips.find((c) => c.id === 'clip-14' && c.videoUrl && c.source) ||
     clips.find((c) => c.videoUrl && c.source) ||
     clips.find((c) => c.videoUrl) ||
     clips.find((c) => c.source) ||
