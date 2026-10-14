@@ -5,7 +5,7 @@ import {promotionPrompt,promotionCategory,promotionVideoPrompt} from './promotio
 import {catalogSeeds, buildCatalog} from './studio-catalog.js';
 import path from 'node:path';
 import {randomUUID} from 'node:crypto';
-import {StudioDomain, slotsFor} from './studio-domain.js';
+import {StudioDomain, slotsFor,videoMaterialIds} from './studio-domain.js';
 import {listContentPacks, contentPackActionDirectory} from './content-packs.js';
 import {loadActionTemplates, templatesWithCompatibility} from './action-templates.js';
 import {STORY_TEMPLATES} from './story-library.js';
@@ -98,7 +98,7 @@ export class StudioService {
     return p.plans.flatMap(plan=>slotsFor(plan).map((ids,index)=>{
       if(only&&(only.planId!==plan.id||only.index!==index))return null;
       const template=plan.snapshot;
-      const referenceImageIds=plan.referenceMode==='reference-image'?[...new Set([...ids,...Object.values(p.materials||{}).flat()])]:ids;
+      const referenceImageIds=plan.referenceMode==='reference-image'?[...new Set([...ids,...videoMaterialIds(p,plan)])]:ids;
       const bindings=p.promotion?.enabled&&plan.referenceMode==='reference-image'?'\n附件角色：'+referenceImageIds.map((id,i)=>`附件${i+1}用于${p.materials?.personImageIds?.includes(id)?'人物身份与造型':p.materials?.productImageIds?.includes(id)?'产品／服务细节':'真实环境与空间布局'}`).join('；'):'';
       if(template.packId && template.actionId && ids[0]){
         const profile=this.references.get(ids[0]).sceneProfile;

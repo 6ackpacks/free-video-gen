@@ -28,7 +28,8 @@ export function creativePrompt(p,plan){
 }
 export function creativeErrors(p,references,routes=[]){
  const errors=promotionErrors(p,references,routes),avatar=p.templateTypeId?.endsWith(':avatar-talk'),b=p.productBrief||{},m=p.materials||{};
- for(const list of Object.values(m))for(const id of list){try{references.get(id);}catch{errors.push('所选素材不存在，请重新选择');}}
+ const monitor=p.templateTypeId==='footspa:monitor'||p.plans?.every(plan=>plan.snapshot?.packId==='foot-spa-store');
+ for(const [role,list] of Object.entries(m))for(const id of list){if(monitor&&role==='sceneImageIds')continue;try{references.get(id);}catch{errors.push('所选素材不存在，请重新选择');}}
  if(avatar||p.videoDirection){if(!m.productImageIds?.length)errors.push('请添加真实产品图');if(!b.name)errors.push('请填写产品名称');if(!b.sellingPoints)errors.push('请填写并确认产品卖点');}
  if(avatar){if(!b.script)errors.push('请填写口播文案');
   if(p.avatarMode==='audio-driven'){if(!p.audioUrl)errors.push('请提供配音音频的HTTPS地址');if(p.plans.some(v=>!routes.find(r=>r.id===v.videoRoute)?.audioDriven))errors.push('音频对口型请选择支持配音驱动的服务');}

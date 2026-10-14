@@ -8,6 +8,7 @@ import {creativeInputs,creativeErrors} from './studio-creative-inputs.js';
 const copy = value => structuredClone(value);
 const stamp = () => new Date().toISOString();
 export function fingerprint(value) { return createHash('sha256').update(JSON.stringify(value)).digest('hex'); }
+export function videoMaterialIds(p,plan){const m=p.materials||{};if(p.templateTypeId==='footspa:monitor'||plan.snapshot?.packId==='foot-spa-store')return plan.referenceMode==='reference-image'?[...(m.personImageIds||[]),...(m.productImageIds||[])]:[];return Object.values(m).flat();}
 export function durationValues(route, story = false) {
   if (!route?.duration) return [];
   const {min = 2, max = 15, values} = route.duration;
@@ -104,8 +105,8 @@ export class StudioDomain {
   }
   readiness(p, routes, references) {
     const errors=creativeErrors(p,references,routes);let count=0,ready=0;
-    for(const id of Object.values(p.materials||{}).flat())if(this.state.assets[id]?.archived||this.state.assets[id]?.confirmed===false)errors.push('产品、人物或场景素材尚未确认或已归档');
     for(const plan of p.plans){
+      for(const id of videoMaterialIds(p,plan))if(this.state.assets[id]?.archived||this.state.assets[id]?.confirmed===false)errors.push('产品、人物或场景素材尚未确认或已归档');
       count+=plan.count;
       const route=routes.find(r=>r.id===plan.videoRoute);
       if(!durationValues(route,p.scene==='story').includes(plan.duration))errors.push(`${plan.snapshot.name}：服务不支持 ${plan.duration} 秒，请选择可用时长`);

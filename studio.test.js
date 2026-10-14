@@ -12,6 +12,13 @@ const route={id:'doubao',configured:true,duration:{min:5,max:15,values:[5,10,15]
 function fixture(t){const dir=fs.mkdtempSync(path.join(os.tmpdir(),'studio-'));fs.mkdirSync(path.join(dir,'data'));t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));const seeds=['a','b','c'].map(id=>({id,name:id,description:'真实空间自然动作',actions:['行走'],duration:5,mapping:'common',scene:'footspa'}));const domain=new StudioDomain(path.join(dir,'data','studio.json'),seeds);return {dir,domain,seeds};}
 const plan=(id,count=1)=>({templateId:id,count,duration:5,videoRoute:'doubao',resolution:'auto',imageIds:['image'],mapping:'common'});
 const refs={get(id){if(!id)throw Error('missing');return {id};}};
+test('监控视频只校验并发送当前采用的底图，项目中未采用或归档的备选图不阻挡；未确认的实际底图仍阻挡',t=>{
+ const {domain}=fixture(t),p=domain.saveProject({scene:'footspa',plans:[plan('a',2)],materials:{sceneImageIds:['unused','archived','image']}});p.templateTypeId='footspa:monitor';p.plans[0].prompts=['a','b'];p.plans[0].promptsDirty=false;p.plans[0].referenceMode='reference-image';
+ domain.state.assets.unused={confirmed:false};domain.state.assets.archived={archived:true};domain.state.assets.image={confirmed:true};
+ assert.deepEqual(domain.readiness(p,[route],refs).errors,[]);
+ const service=Object.assign(Object.create(StudioService.prototype),{domain,references:refs});assert.deepEqual(service.jobs(p).map(j=>j.referenceImageIds),[['image'],['image']]);
+ domain.state.assets.image.confirmed=false;assert.ok(domain.readiness(p,[route],refs).errors.includes('底图已准备 0/2 条'));
+});
 test('配置校验失败不改变运行服务地址，地址不能夹带密钥',t=>{
   const {dir}=fixture(t),before=process.env.APIMART_BASE_URL;
   assert.throws(()=>saveStudioConnections(dir,{values:{APIMART_BASE_URL:'https://example.org',TEXT_PROVIDER:'invalid'}}),/配置无效/);
