@@ -1,5 +1,6 @@
 import {upgradeServiceRecipes} from './service-recipes.js';
 import {VideoProduction} from './video-production.js';
+import {monitorVideoRules} from './image-transforms.js';
 import {PromotionProduction} from './promotion-production.js';
 import {promotionPrompt,promotionCategory,promotionVideoPrompt} from './promotion-model.js';
 import {catalogSeeds, buildCatalog} from './studio-catalog.js';
@@ -67,14 +68,14 @@ export class StudioService {
       if(!only&&(mode==='missing'||mode==='dirty'&&!plan.promptsDirty)&&plan.prompts.length===plan.count&&plan.prompts.every(v=>v.trim())){completed+=plan.count;report({completed,total});continue;}
       const signature=plan.signature;
       if(p.promotion?.enabled&&promotionCategory(p)&&plan.videoRoute==='doubao'){
-        const prompts=Array.from({length:plan.count},(_,i)=>plan.prompts[i]||'');
+        const prompts=Array.from({length:plan.count},(_,i)=>plan.prompts?.[i]||'');
         for(let i=0;i<plan.count;i++)if((!only||only.index===i)&&(mode!=='missing'||!prompts[i].trim()))prompts[i]=promotionVideoPrompt(p,plan);
         plan.prompts=prompts;plan.promptsDirty=false;plan.scriptConfirmed=false;this.domain.save();completed+=only?1:plan.count;report({completed,total});continue;
       }
       const monitor=plan.snapshot.packId==='foot-spa-store'&&plan.snapshot.actionTemplate;
-      const baseFor=index=>p.promotion?.enabled&&promotionCategory(p)?promotionPrompt(p,plan)+(plan.creativeBrief?'\n本条补充：'+plan.creativeBrief:''):(monitor?footspaActionPrompt(plan.snapshot.actionTemplate,{duration:plan.duration,ratio:plan.ratio,personImages:!!p.materials?.personImageIds?.length,index}):plan.content||plan.snapshot.description)+'\n已确认动作顺序：'+plan.snapshot.actions.join('；')+'\n'+(plan.content?'用户编辑的动作补充：'+plan.content+'\n':'')+creativePrompt(p,plan)+(monitor&&p.peopleBrief?'\n人物造型补充（不得改变模板人数）：'+p.peopleBrief:'');
-      if(monitor&&plan.videoRoute==='doubao'){
-        const prompts=Array.from({length:plan.count},(_,i)=>plan.prompts[i]||'');
+      const baseFor=index=>p.promotion?.enabled&&promotionCategory(p)?promotionPrompt(p,plan)+(plan.creativeBrief?'\n本条补充：'+plan.creativeBrief:''):(monitor?footspaActionPrompt(plan.snapshot.actionTemplate,{duration:plan.duration,ratio:plan.ratio,personImages:!!p.materials?.personImageIds?.length,index,lockFrame:!!slotsFor(plan)[index-1]?.length}):plan.content||plan.snapshot.description)+'\n已确认动作顺序：'+plan.snapshot.actions.join('；')+'\n'+(plan.content?'用户编辑的动作补充：'+plan.content+'\n':'')+creativePrompt(p,plan)+(monitor&&p.peopleBrief&&!plan.imageIds?.length?'\n人物造型补充（不得改变模板人数）：'+p.peopleBrief:'');
+      if(monitor){
+        const prompts=Array.from({length:plan.count},(_,i)=>plan.prompts?.[i]||'');
         for(let i=0;i<plan.count;i++)if((!only||only.index===i)&&!prompts[i].trim())prompts[i]=baseFor(i+1);
         plan.prompts=prompts;plan.promptsDirty=false;this.domain.save();completed+=only?1:plan.count;report({completed,total});continue;
       }
@@ -82,7 +83,7 @@ export class StudioService {
         const jobs=replicaPrompts({replica:plan.snapshot.replica,count:plan.count,duration:plan.duration,videoRoute:plan.videoRoute,resolution:plan.resolution,ratio:'9:16',referenceImageIds:[],actionPack:plan.snapshot.actionPack,actionPackId:plan.snapshot.actionPack?.id,creativeBrief:plan.creativeBrief},this.provider.routes.find(r=>r.id===plan.videoRoute));
         const current=this.domain.project(id).plans.find(v=>v.id===plan.id);current.prompts=jobs.prompts.map((j,i)=>j.prompt+(slotsFor(plan)[i].length?'\n附件是本画面的初始图片或主体参考；使用附件中的主体替换原视频对应内容，保留模板的镜头风格和相对节奏。':''));current.promptsDirty=false;this.domain.save();completed+=plan.count;report({completed,total});continue;
       }
-      const prompts=only?Array.from({length:plan.count},(_,i)=>plan.prompts[i]||''):mode==='missing'?[...plan.prompts]:[];
+      const prompts=only?Array.from({length:plan.count},(_,i)=>plan.prompts?.[i]||''):mode==='missing'?[...plan.prompts]:[];
       const indices=Array.from({length:plan.count},(_,i)=>i).filter(i=>(!only||only.index===i)&&(mode!=='missing'||!String(plan.prompts[i]||'').trim()));
       for(let offset=0;offset<indices.length;offset+=10){
       const result=await this.provider.rewritePrompts({mode:p.promotion?.enabled&&promotionCategory(p)?'promotion':p.scene==='story'?'story':p.scene==='massage'?'paired':'store',creativeBrief:plan.creativeBrief,outputLanguage:'zh',context:{brandName:p.brandName,brandFacts:p.brandFacts,imageRules:plan.snapshot.imageRules,actions:plan.snapshot.actions,duration:plan.duration,sceneEvidence:(plan.imageIds||[]).map(id=>this.references.get(id).sceneProfile),requirements:p.promotion?.enabled&&promotionCategory(p)?promotionPrompt(p,plan):monitor?'保留给定核心事件、成年人物数量、进入顺序和结束状态；每条一个固定机位连续镜头，按给定时长重写自然动作节奏。用户想法只能调整造型、神态与细节；不改变门的位置、场景类型或结尾。不要额外添加第二个事件。':(plan.snapshot.serviceRecipeId||p.videoDirection||p.templateTypeId?.endsWith(':avatar-talk'))?'按用户确认的视频方向与文案，在指定时长内输出完整短片提示词；不要覆盖单场景口播或一镜到底约束。':p.scene==='story'?'输出完整脚本和编号分镜；仅用品牌事实，未知信息写待确认。':`单个固定镜头，1–2个自然动作，不改变底图空间。每条人物外貌、自然穿搭、表情和细节有所变化，保持动作一致。${p.scene==='ktv'?'KTV商业氛围，不套用足浴或监控风格。':''}`},items:indices.slice(offset,offset+10).map(index=>({id:String(index),prompt:`第${index+1}条，${plan.duration}秒。模板规则：${baseFor(index+1)}\n人物：${plan.snapshot.people}\n图片要求：${plan.snapshot.imageRules}\n${p.scene==='story'?`宣传主体：${p.brandName}\n已确认资料：${p.brandFacts}\n请生成完整脚本和按时间顺序编号的分镜。`:''}`}))});
@@ -98,6 +99,7 @@ export class StudioService {
     return p.plans.flatMap(plan=>slotsFor(plan).map((ids,index)=>{
       if(only&&(only.planId!==plan.id||only.index!==index))return null;
       const template=plan.snapshot;
+      const monitor=p.templateTypeId==='footspa:monitor'||template.packId==='foot-spa-store';
       const referenceImageIds=plan.referenceMode==='reference-image'?[...new Set([...ids,...videoMaterialIds(p,plan)])]:ids;
       const bindings=p.promotion?.enabled&&plan.referenceMode==='reference-image'?'\n附件角色：'+referenceImageIds.map((id,i)=>`附件${i+1}用于${p.materials?.personImageIds?.includes(id)?'人物身份与造型':p.materials?.productImageIds?.includes(id)?'产品／服务细节':'真实环境与空间布局'}`).join('；'):'';
       if(template.packId && template.actionId && ids[0]){
@@ -105,10 +107,18 @@ export class StudioService {
         const pack=listContentPacks().find(v=>v.id===template.packId);
         if(pack?.actionLibrary&&profile){const compat=templatesWithCompatibility(profile,contentPackActionDirectory(pack),{expectedCount:pack.expectedActionCount}).find(v=>v.id===template.actionId);if(compat&&!compat.compatibility.compatible)throw Error(compat.compatibility.reasons.join('；'));}
       }
-      return {id:randomUUID(),index:index+1,skillId:p.scene==='story'?'story-ad':'studio',sceneId:p.scene,projectId:p.id,planId:plan.id,slotIndex:index,templateId:plan.templateId,templateVersion:template.version,templateSnapshot:structuredClone(template),templateName:template.name,packId:template.packId,actionId:template.actionId,actionTemplate:template.actionTemplate,duration:plan.duration,videoRoute:plan.videoRoute,resolution:plan.resolution,autoRatio:plan.autoRatio!==false,ratio:plan.ratio||'9:16',prompt:(p.promotion?.enabled?plan.prompts[index]?.replace(/\n附件角色：[^\n]*$/,''):plan.prompts[index])+bindings,lockedPrompt:true,referenceImageIds,audioUrl:p.avatarMode==='audio-driven'?p.audioUrl:'',nativeAudio:!!p.promotion?.enabled||!!p.productBrief?.script||!!p.productBrief?.music,referenceId:ids[0]||'',referenceMode:plan.referenceMode||(ids.length>1?'reference-image':'first-frame'),exportName:`${p.scene}/${template.name}/${String(index+1).padStart(3,'0')}.mp4`};
+      return {id:randomUUID(),index:index+1,skillId:p.scene==='story'?'story-ad':'studio',sceneId:p.scene,projectId:p.id,planId:plan.id,slotIndex:index,templateId:plan.templateId,templateVersion:template.version,templateSnapshot:structuredClone(template),templateName:template.name,packId:template.packId,actionId:template.actionId,actionTemplate:template.actionTemplate,duration:plan.duration,videoRoute:plan.videoRoute,resolution:plan.resolution,autoRatio:plan.autoRatio!==false,ratio:plan.ratio||'9:16',prompt:monitor?monitorVideoRules(plan.prompts[index]+bindings):(p.promotion?.enabled?plan.prompts[index]?.replace(/\n附件角色：[^\n]*$/,''):plan.prompts[index])+bindings,lockedPrompt:true,referenceImageIds,audioUrl:p.avatarMode==='audio-driven'?p.audioUrl:'',nativeAudio:!!p.promotion?.enabled||!!p.productBrief?.script||!!p.productBrief?.music,referenceId:ids[0]||'',referenceMode:plan.referenceMode||(ids.length>1?'reference-image':'first-frame'),exportName:`${p.scene}/${template.name}/${String(index+1).padStart(3,'0')}.mp4`};
     }).filter(Boolean));
   }
-  submit(input){
+  assertProductionAvailable(projectId,trial=false,planId=null,index=null){
+    const all=this.queue.state.jobs.filter(j=>j.projectId===projectId&&j.status!=='cancelled');
+    if(all.some(j=>j.status==='needs_review'))throw Error('已有视频发送结果需要核对，请先查询原任务，避免重复发送');
+    const jobs=all.filter(j=>!j.isTrial||(trial&&j.planId===planId&&j.slotIndex===index));
+    if(jobs.some(j=>j.status==='needs_review'))throw Error('已有视频发送结果需要核对，请先查询原任务，避免重复发送');
+    if(jobs.some(j=>j.status==='error'))throw Error('已有视频生成失败，请在任务中重试失败项');
+    if(jobs.some(j=>j.status!=='complete'))throw Error('项目正在制作，请等待当前批次完成');
+  }
+  submit(input,preparedProduction=false){
     const p=this.domain.project(input.projectId),requestId=String(input.requestId||'');
     if(!requestId)throw Error('缺少提交标识');
     if(this.domain.state.requests[requestId])return this.domain.state.requests[requestId];
@@ -132,7 +142,7 @@ export class StudioService {
       const adopted=this.domain.adopted(p,this.queue);
       jobs=jobs.filter(j=>!adopted.some(t=>t.planId===j.planId&&t.index===j.slotIndex));
       const existing=this.queue.state.jobs.filter(j=>j.projectId===p.id&&!j.isTrial&&!['cancelled'].includes(j.status));
-      if(existing.length)throw Error('项目已提交，请在项目内重试失败项或创建副本，避免重复生产');
+      if(existing.length){if(!preparedProduction)throw Error('项目已提交，请在项目内重试失败项或创建副本，避免重复生产');this.assertProductionAvailable(p.id);}
     }
     if(!jobs.length)throw Error('所有画面已有采纳的试片');
     if(jobs.some(j=>j.videoRoute==='doubao'&&j.prompt.length>1900))throw Error('视频描述过长，请精简宣传内容后重新生成样片');

@@ -50,15 +50,16 @@ export class MonitorWorkflow {
       )
     )
       return active;
-    const sources = p.materials?.sceneImageIds || [];
+    const sources = input.sourceIds || p.materials?.sceneImageIds || [];
     for (const id of sources) this.service.references.get(id);
     for (const plan of p.plans)
       if (
-        plan.imageConfig?.sourceSceneId &&
+        !input.independent && plan.imageConfig?.sourceSceneId &&
         !sources.includes(plan.imageConfig.sourceSceneId)
       )
         throw Error("动作指定的场景参考已移除，请重新选择");
     const signature = JSON.stringify([
+      input.only,input.independent,
       sources,
       p.materials?.personImageIds || [],
       p.peopleBrief,
@@ -79,6 +80,7 @@ export class MonitorWorkflow {
       projectId,
       signature,
       autoVideo: input.autoVideo === true,
+      independent:input.independent===true,only:input.only||null,
       status: "images",
       createdAt: new Date().toISOString(),
       slots: p.plans.flatMap((plan, n) =>
@@ -87,7 +89,7 @@ export class MonitorWorkflow {
           planId: plan.id,
           index,
           sourceId:
-            plan.imageConfig?.sourceSceneId ||
+            (!input.independent && plan.imageConfig?.sourceSceneId) ||
             sources[
               (p.plans.slice(0, n).reduce((sum, v) => sum + v.count, 0) +
                 index) %
@@ -98,6 +100,7 @@ export class MonitorWorkflow {
         })),
       ),
     };
+    if(task.only)task.slots=task.slots.filter(s=>s.planId===task.only.planId&&s.index===task.only.index);
     if (task.slots.length > 100) throw Error("一次最多100条视频");
     if (input.reuseExisting) {
       const ids = p.plans.flatMap((plan) =>
@@ -124,6 +127,7 @@ export class MonitorWorkflow {
   bind(task) {
     const p = this.service.domain.project(task.projectId);
     for (const plan of p.plans) {
+      if(task.only){if(plan.id===task.only.planId){const slot=task.slots[0];const ids=slotsFor(plan).map(v=>v[0]||'');ids[slot.index]=slot.referenceId;plan.imageIds=ids;plan.mapping='one-to-one';plan.promptsDirty=true;}continue;}
       const slots = task.slots
         .filter((s) => s.planId === plan.id)
         .sort((a, b) => a.index - b.index);
@@ -206,14 +210,14 @@ export class MonitorWorkflow {
             for (const slot of task.slots) {
               if (slot.status === "queued" && waiting < 2) {
                 const primary = task.slots[0];
-                if (!slot.sourceId && slot !== primary && !primary.referenceId)
+                if (!task.independent && !slot.sourceId && slot !== primary && !primary.referenceId)
                   continue;
                 const image = this.service.images.create({
                   projectId: task.projectId,
                   planId: slot.planId,
                   count: 1,
                   slotIndex: slot.index,
-                  sourceSceneId: slot.sourceId || primary.referenceId || "",
+                  sourceSceneId: slot.sourceId || (!task.independent&&primary.referenceId) || "",
                   isolatedReference: true,
                   requestId:
                     task.id + ":" + slot.id + ":" + (slot.attempt || 0),

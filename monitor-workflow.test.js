@@ -223,3 +223,11 @@ test("失败视频重试采用已确认的新提示词、模型、首帧，保�
   assert.equal(job.videoRoute, "new-model");
   assert.deepEqual(job.referenceImageIds, ["new-frame"]);
 });
+
+test('独立生成模式保留上传场景，试片只生成指定一张并绑定对应位置',async t=>{
+ const f=fixture(t);const task=f.flow.create('project',{sourceIds:['scene-a'],independent:true,only:{planId:'b',index:1}});await f.flow.pump();assert.equal(f.images.size,1);assert.equal([...f.images.values()][0].input.sourceSceneId,'scene-a');f.finish();await f.flow.pump();f.flow.confirm('project',{autoDraft:false});assert.equal(f.p.plans[1].imageIds[1],task.slots[0].referenceId);assert.deepEqual(f.p.plans[0].imageIds,[]);
+});
+
+test('独立批量图片失败只重试失败位置，已经成功的图片保持原编号',async t=>{
+ const f=fixture(t,[]);f.p.plans=f.p.plans.slice(0,1);f.p.plans[0].count=3;const task=f.flow.create('project',{sourceIds:[],independent:true});await f.flow.pump();const initial=[...f.images.values()];Object.assign(initial[0].items[0],{status:'complete',referenceIdResult:'kept'});f.flow.service.domain.state.assets.kept={confirmed:false};Object.assign(initial[1].items[0],{status:'error',error:'rejected'});await f.flow.pump();await f.flow.pump();const third=[...f.images.values()][2];Object.assign(third.items[0],{status:'complete',referenceIdResult:'third'});f.flow.service.domain.state.assets.third={confirmed:false};await f.flow.pump();assert.equal(task.status,'error');const failed=task.slots.find(s=>s.status==='error');await f.flow.retry('project',failed.id);await f.flow.pump();const replacement=initial[1];Object.assign(replacement.items[0],{status:'complete',referenceIdResult:'replacement'});f.flow.service.domain.state.assets.replacement={confirmed:false};await f.flow.pump();assert.equal(task.status,'images_ready');assert.equal(f.images.size,3);assert.deepEqual(task.slots.map(s=>s.referenceId),['kept','replacement','third']);
+});

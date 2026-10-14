@@ -16,7 +16,7 @@ test('监控视频只校验并发送当前采用的底图，项目中未采用�
  const {domain}=fixture(t),p=domain.saveProject({scene:'footspa',plans:[plan('a',2)],materials:{sceneImageIds:['unused','archived','image']}});p.templateTypeId='footspa:monitor';p.plans[0].prompts=['a','b'];p.plans[0].promptsDirty=false;p.plans[0].referenceMode='reference-image';
  domain.state.assets.unused={confirmed:false};domain.state.assets.archived={archived:true};domain.state.assets.image={confirmed:true};
  assert.deepEqual(domain.readiness(p,[route],refs).errors,[]);
- const service=Object.assign(Object.create(StudioService.prototype),{domain,references:refs});assert.deepEqual(service.jobs(p).map(j=>j.referenceImageIds),[['image'],['image']]);
+ const service=Object.assign(Object.create(StudioService.prototype),{domain,references:refs});assert.deepEqual(service.jobs(p).map(j=>j.referenceImageIds),[['image'],['image']]);assert.ok(service.jobs(p).every(j=>j.prompt.includes('45 度')&&j.prompt.includes('2026年9月9日 PM 10:41')&&j.prompt.includes('不換人'.replace('換','换'))));
  domain.state.assets.image.confirmed=false;assert.ok(domain.readiness(p,[route],refs).errors.includes('底图已准备 0/2 条'));
 });
 test('配置校验失败不改变运行服务地址，地址不能夹带密钥',t=>{
@@ -108,4 +108,14 @@ test('底图准备页刷新恢复来源配置、共用底图及当前模板，�
  const p=domain.saveProject(input),restored=new StudioDomain(path.join(dir,'data','studio.json')).project(p.id);
  assert.equal(restored.stage,'images');assert.equal(restored.imagePlanId,'prepare-a');assert.equal(restored.commonImageId,'image');assert.equal(restored.defaultMapping,'common');assert.equal(restored.plans[0].imageConfig.pose,'站在房门前');assert.equal(restored.plans[0].count,5);assert.equal(restored.plans[0].snapshot.version,1);
  restored.plans[0].prompts=Array(5).fill('已确认内容');restored.plans[0].promptsDirty=false;domain.saveProject({...restored,stage:'templates'});assert.equal(domain.project(p.id).plans[0].promptsDirty,false);
+});
+
+test('完成的历史批次仅后台准备流程可以提交新批次，失败历史仍要求重试',t=>{
+ const {domain}=fixture(t),queue={state:{jobs:[]},enqueue(jobs){const b={id:'batch-'+this.state.jobs.length,count:jobs.length};this.state.jobs.push(...jobs.map(j=>({...j,status:'queued'})));return b;}};
+ const service=Object.assign(Object.create(StudioService.prototype),{domain,queue,references:refs,provider:{routes:[route]}}),p=domain.saveProject({scene:'footspa',plans:[plan('a')]});p.plans[0].prompts=['prompt'];
+ service.submit({projectId:p.id,requestId:'first'});queue.state.jobs[0].status='complete';
+ assert.throws(()=>service.submit({projectId:p.id,requestId:'legacy'}),/已提交/);
+ assert.equal(service.submit({projectId:p.id,requestId:'prepared'},true).count,1);
+ assert.equal(service.submit({projectId:p.id,requestId:'prepared'},true).count,1);assert.equal(queue.state.jobs.length,2);
+ queue.state.jobs[1].status='error';assert.throws(()=>service.submit({projectId:p.id,requestId:'failed'},true),/重试失败/);assert.equal(queue.state.jobs.length,2);
 });

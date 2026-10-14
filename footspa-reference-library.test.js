@@ -33,14 +33,14 @@ test('人物图选填且合成首帧实际携带门店与人物附件，不拿�
  assert.deepEqual(images.create({projectId:'p',planId:'plan',count:1}).items[0].referenceIds,['scene']);
  assert.match(task.items[0].prompt,/45 度/);assert.match(task.items[0].prompt,/通道01/);assert.match(task.items[0].prompt,/不要电影感/);assert.doesNotMatch(task.items[0].prompt,/不添加假时间戳/);
 });
-test('制作台批量提示词实际使用参考动作规则，时长、核心动作和结尾传到改写模型',async()=>{
+test('制作台批量提示词保留固定监控规则、时长、动作和结尾，不让改写模型删掉镜头要求',async()=>{
  const action=loadActionTemplates().find(a=>a.id==='action-16');let input;
  const plan={id:'plan',count:2,duration:6,ratio:'9:16',signature:'same',imageIds:[],snapshot:{packId:'foot-spa-store',actionTemplate:action,actions:[action.actionText],description:action.actionText,people:'2位成年人'}};
  const p={id:'p',scene:'footspa',plans:[plan],materials:{personImageIds:[]}};
  const service={domain:{project:()=>p,save:()=>{},readiness:()=>({errors:[]}),adopted:()=>[]},queue:{},provider:{routes:[],rewritePrompts:async v=>{input=v;return {items:v.items};}},references:{get:()=>({})}};
  service.project=id=>p;
  await StudioService.prototype.generate.call(service,'p');
- assert.equal(input.items.length,2);assert.ok(input.items.every(i=>i.prompt.includes(action.actionText)&&i.prompt.includes(action.endState)&&i.prompt.includes('6秒')));assert.ok(input.context.requirements.includes('进入顺序'));
+ assert.equal(input,undefined);assert.ok(plan.prompts.every(prompt=>prompt.includes(action.actionText)&&prompt.includes(action.endState)&&prompt.includes('6秒')&&prompt.includes('2026年9月9日 PM 10:41')&&prompt.includes('45 度')));
  assert.equal(plan.prompts.length,2);assert.equal(plan.promptsDirty,false);
 });
 test('各动作可生成5到8秒提示词，保留进入顺序、人数、结束状态与可选人物身份',()=>{
@@ -51,3 +51,5 @@ test('各动作可生成5到8秒提示词，保留进入顺序、人数、结束
  assert.throws(()=>footspaActionPrompt(loadActionTemplates()[0],{duration:NaN}),/时长/);
  const stairs=loadActionTemplates().find(a=>a.id==='action-20');assert.equal(compatibility(stairs,{sceneTags:['corridor','clear_walkway'],maxPeople:2}).compatible,false);
 });
+
+test('一张底图锁定一个人物版本，视频描述不重新指定长相和服装',()=>{const a=loadActionTemplates()[0];const prompt=footspaActionPrompt(a,{lockFrame:true});assert.match(prompt,/不换人、不改变穿搭/);assert.doesNotMatch(prompt,/鹅蛋脸|高马尾|挂脖/);assert.match(prompt,/灰蒙蒙/);assert.match(prompt,/通道01/);});

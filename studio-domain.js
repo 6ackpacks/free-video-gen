@@ -1,3 +1,4 @@
+import {monitorVideoRules} from './image-transforms.js';
 import {buildCatalog, defaultType, INDUSTRIES, catalogSeeds} from './studio-catalog.js';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -123,7 +124,7 @@ export class StudioDomain {
       if(p.scene==='massage' && plan.mapping==='one-to-one' && new Set(plan.imageIds.slice(0,plan.count)).size!==plan.count)errors.push(`${plan.snapshot.name}：逐张按摩制作需每条视频独立的已确认人物底图`);
       if(plan.prompts.length!==plan.count||plan.prompts.some(v=>typeof v!=='string'||!v.trim()))errors.push(`${plan.snapshot.name}：请生成提示词`);
       if(plan.promptsDirty)errors.push(`${plan.snapshot.name}：设置已变更，请重新生成或确认保留的提示词`);
-      if(plan.videoRoute==='doubao'&&plan.prompts.some(text=>text.length>1900))errors.push(`${plan.snapshot.name}：豆包提示词过长，请精简到1900字以内，避免被截断`);
+      if(plan.videoRoute==='doubao'&&plan.prompts.some(text=>(p.templateTypeId==='footspa:monitor'||plan.snapshot.packId==='foot-spa-store'?monitorVideoRules(text):text).length>1900))errors.push(`${plan.snapshot.name}：豆包提示词过长，请精简到1900字以内，避免被截断`);
       if(route&&!route.resolutions.includes(plan.resolution))errors.push(`${plan.snapshot.name}：请选择可用画质`);
       if(p.scene==='story'&&!plan.scriptConfirmed)errors.push(`${plan.snapshot.name}：请确认脚本与分镜`);
     }

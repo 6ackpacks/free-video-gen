@@ -54,7 +54,7 @@ test('Wan3 parameters are bounded and default to 480P', () => {
   assert.equal(shouldGenerateAudio('无对白'), false);
 });
 
-test('camera image tasks receive different timestamps and fixed edit instructions', async () => {
+test('camera image tasks keep the requested fixed timestamp and camera instructions', async () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'image-transform-'));
   fs.mkdirSync(directory, { recursive: true });
   let n = 0;
@@ -62,7 +62,7 @@ test('camera image tasks receive different timestamps and fixed edit instruction
   const references = { ensure: async () => 'https://example.test/input.jpg' };
   const manager = new ImageTransformManager(directory, provider, references);
   const a = await manager.create('ref-1'); const b = await manager.create('ref-1');
-  assert.notEqual(a.timestamp, b.timestamp);
+  assert.equal(a.timestamp, b.timestamp);assert.equal(a.timestamp,'2026年9月9日 PM 10:41');assert.notEqual(a.id,b.id);
   assert.match(a.prompt, /45 度/);
   assert.match(a.prompt, /严格保留原图/);
   assert.match(IMAGE_PROMPT('2026年9月9日 PM 10:24'), /通道01/);

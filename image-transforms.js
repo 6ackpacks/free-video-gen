@@ -3,8 +3,10 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 
 export const MONITOR_CAMERA_STYLE = `只改变拍摄机位、透视与成像质感：摄像头固定安装在靠近天花板的高处角落，以约 45 度较大俯角向下拍摄；使用老式轻微广角监控镜头，形成明显纵深透视和轻微广角畸变。画面轻微模糊，灰蒙蒙一层雾感，低饱和、低对比，带自然噪点、压缩痕迹和轻微曝光不完美，保持彩色、真实实拍感，不要电影感。`;
+export const MONITOR_TIME_TEXT = '左上角加入略有老旧感的白色 CCTV 时间：“2026年9月9日 PM 10:41”“通道01”。文字清楚且稳定，不添加宣传字幕或监控屏幕外框。';
+export function monitorVideoRules(text){const body=String(text||'');return body+(body.includes(MONITOR_CAMERA_STYLE)&&body.includes(MONITOR_TIME_TEXT)?'':'\n'+MONITOR_CAMERA_STYLE+MONITOR_TIME_TEXT)+'\n固定要求优先：摄像头全程静止，不推拉、不跟拍、不切换机位。锁定对应底图的人物、面容与服装，不换人；时间和通道文字保持稳定。';}
 
-const IMAGE_PROMPT = timestamp => `把参考图加工为真实实拍的老旧监控摄像头画面。严格保留原图中的空间、人物、物件、门、通道与装饰，不增加、不删除、不替换场景内容。${MONITOR_CAMERA_STYLE}左上角加入略有老旧感的白色监控时间文字：“${timestamp}”“通道01”。时间文字清晰但不过度醒目。`;
+const IMAGE_PROMPT = timestamp => `把参考图加工为真实实拍的老旧监控摄像头画面。严格保留原图中的空间、人物、物件、门、通道与装饰，不增加、不删除、不替换场景内容。${MONITOR_CAMERA_STYLE}${MONITOR_TIME_TEXT}`;
 
 export class ImageTransformManager {
   constructor(directory, provider, references) {
@@ -14,16 +16,7 @@ export class ImageTransformManager {
   save() { fs.writeFileSync(this.file + '.tmp', JSON.stringify(this.items, null, 2)); fs.renameSync(this.file + '.tmp', this.file); }
   list() { return this.items.slice(0, 50); }
   get(id) { const item = this.items.find(x => x.id === id); if (!item) throw new Error('生图任务不存在'); return item; }
-  timestamp() {
-    const used = new Set(this.items.map(x => x.timestamp));
-    for (let i = 0; i < 500; i++) {
-      const date = new Date(Date.now() - Math.floor(Math.random() * 90 * 86400000) - Math.floor(Math.random() * 86400000));
-      const hour = 18 + Math.floor(Math.random() * 6), minute = Math.floor(Math.random() * 60);
-      const value = `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日 PM ${String(hour > 12 ? hour - 12 : hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
-      if (!used.has(value)) return value;
-    }
-    return `${new Date().toISOString()} PM`;
-  }
+  timestamp() { return '2026年9月9日 PM 10:41'; }
   async create(referenceId) {
     const timestamp = this.timestamp();
     const imageUrl = await this.references.ensure(referenceId);
