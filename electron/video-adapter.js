@@ -4,7 +4,7 @@ import {randomUUID,createHash} from 'node:crypto';
 const pause=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 export function latestReply(page,lastSentText){const body=String(page.text||'');const at=lastSentText?body.lastIndexOf(lastSentText):-1;const tail=at>=0?body.slice(at+lastSentText.length).trim():body;return at>=0?tail:page.assistantText&&page.assistantText!==lastSentText?String(page.assistantText):tail;}
 export function requiresVideoConfirmation(text){return /确认.{0,35}(生成|开始|视频|方案|继续)|确定.{0,25}生成|方案.{0,25}(确认|满意)|是否.{0,25}(生成|开始)|回复[“"']?确认/.test(String(text));}
-export function createNativeVideoAdapter({store,createView,openAccount,directory,wait=pause}) {
+export function createNativeVideoAdapter({store,createView,openAccount,directory,wait=pause,now=()=>Date.now()}) {
  const pause=wait;const activeTasks=new Set();
  const reveal=(view,task)=>{if(task.verificationVisible&&view.isVisible?.())return;view.setTitle?.('豆包安全验证 · 请完成后保留此窗口');if(!task.verificationVisible){view.center?.();view.restore?.();view.setAlwaysOnTop?.(true);}view.show?.();view.moveTop?.();view.focus?.();task.verificationVisible=true;task.verificationWindow={visible:view.isVisible?.(),bounds:view.getBounds?.()};view.webContents.capturePage?.().then(img=>fs.writeFileSync(path.join(directory,'verification-'+task.id+'.png'),img.toPNG())).catch(()=>{});};
  const file=path.join(directory,'desktop-video-tasks.json'),tasks=fs.existsSync(file)?JSON.parse(fs.readFileSync(file,'utf8')):[];
@@ -22,9 +22,13 @@ export function createNativeVideoAdapter({store,createView,openAccount,directory
  async function run(task,account,resume=false){
   activeTasks.add(task.id);try {
    const view=await createView(account.id);
+   if(!task.conversationId){
+    const accepted=(_event,url,isMainFrame)=>{const match=/\/chat\/(\d+)/.exec(url||'');if(isMainFrame===false||!match||!task.sendAttemptedAt||tasks.find(t=>t.accountId===task.accountId)?.id!==task.id)return;task.conversationId=match[1];task.sendAcknowledgedAt=new Date().toISOString();view.webContents.removeListener?.('did-navigate-in-page',accepted);view.webContents.removeListener?.('did-navigate',accepted);persist();if(task.status==='needs_review'&&!activeTasks.has(task.id)){task.status='starting';task.error='';task.message='验证后已恢复原会话，继续后续确认';persist();run(task,account,true);}};
+    view.webContents.on?.('did-navigate-in-page',accepted);view.webContents.on?.('did-navigate',accepted);
+   }
    await load(view,resume?'https://www.doubao.com/chat/'+task.conversationId:'https://www.doubao.com/chat/');
-   let ready=false,requestedFresh=false;let readyUntil=Date.now()+30000;const verificationUntil=Date.now()+20*60*1000;
-   while(Date.now()<readyUntil&&Date.now()<verificationUntil){const page=await state(view);if(page.captcha){readyUntil=Date.now()+30000;reveal(view,task);task.status='verification_required';task.message='请在豆包安全验证窗口完成验证，完成后自动继续';persist();await pause(1000);continue;}
+   let ready=false,requestedFresh=false;let readyUntil=now()+30000;const verificationUntil=now()+20*60*1000;
+   while(now()<readyUntil&&now()<verificationUntil){const page=await state(view);if(page.captcha){readyUntil=now()+30000;reveal(view,task);task.status='verification_required';task.message='请在豆包安全验证窗口完成验证，完成后自动继续';persist();await pause(1000);continue;}
     const inputReady=await view.webContents.executeJavaScript(`(()=>[...document.querySelectorAll('[contenteditable="true"],textarea')].some(e=>e.getClientRects().length))()`,true);
     if(inputReady&&(resume||!/\/chat\/\d+/.test(page.url))){ready=true;break;}
     if(inputReady&&!requestedFresh){requestedFresh=await view.webContents.executeJavaScript(`(()=>{const b=[...document.querySelectorAll('button,[role="button"],a')].find(b=>b.getClientRects().length&&/新对话|新聊天|开启新对话/.test([b.innerText,b.getAttribute('aria-label'),b.getAttribute('title'),b.getAttribute('data-testid')].join(' ')));if(!b)return false;b.click();return true;})()`,true);}await pause(500);
@@ -34,8 +38,8 @@ export function createNativeVideoAdapter({store,createView,openAccount,directory
    if(!resume&&task.imagePaths.length){
     const debug=view.webContents.debugger;debug.attach('1.3');try{const doc=await debug.sendCommand('DOM.getDocument');const input=await debug.sendCommand('DOM.querySelector',{nodeId:doc.root.nodeId,selector:'input[type=file]'});if(!input.nodeId)throw Error('豆包上传入口尚未加载');await debug.sendCommand('DOM.setFileInputFiles',{nodeId:input.nodeId,files:task.imagePaths});}finally{debug.detach();}await pause(5000);
    }
-   let sent=resume,stableReply='',stableCount=0;const confirmations=new Set((task.confirmationSteps||[]).filter(s=>s.accepted!==false).map(s=>s.responseKey));const deadline=Date.now()+20*60*1000;
-   while(Date.now()<deadline){
+   let sent=resume,stableReply='',stableCount=0;const confirmations=new Set((task.confirmationSteps||[]).filter(s=>s.accepted!==false).map(s=>s.responseKey));const deadline=now()+20*60*1000;
+   while(now()<deadline){
     if(view.webContents.isDestroyed())throw Error('账号窗口关闭，请重新打开后核对会话');
     const current=await state(view);task.lastResponse=current.text.slice(-9000);const match=/\/chat\/(\d+)/.exec(current.url);if(match&&!task.conversationId&&task.sendAttemptedAt)task.conversationId=match[1];if(task.conversationId&&!task.sendAcknowledgedAt){task.sendAcknowledgedAt=new Date().toISOString();persist();}const sameConversation=!task.conversationId||match?.[1]===task.conversationId;
     if(current.captcha){reveal(view,task);task.status='verification_required';task.message='请在豆包安全验证窗口完成验证，完成后自动继续原会话';persist();await pause(3000);continue;}
