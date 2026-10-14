@@ -1,5 +1,6 @@
 import { promptInputs } from './prompt-guidance.js';
 import { randomUUID } from 'node:crypto';
+import { acquisitionBatchTemplate } from './story-acquisition-templates.js';
 
 export const STORY_SCENES = {
   reenactment: {
@@ -67,7 +68,7 @@ export async function draftStoryPromptBatch(input, provider) {
   let lastError;
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
-      const result = await provider.draftStoryPrompts({ count, brandName, brief, duration, ...promptInputs(input), template: input.template, selectedAssets: input.selectedAssets || [], referenceMode: input.referenceMode || 'text-only', priorities: input.priorities || '', storyIdea: input.storyIdea || '', sceneId, sceneName: STORY_SCENES[sceneId].name, retryInstruction: attempt > 1 ? '上一批结构不完整、故事重复或品牌落点错误。本次必须修正。' : '' });
+      const result = await provider.draftStoryPrompts({ count, brandName, brief, duration, ...promptInputs(input), template: acquisitionBatchTemplate(input.template, count, input.variantOffset || 0), selectedAssets: input.selectedAssets || [], referenceMode: input.referenceMode || 'text-only', priorities: input.priorities || '', storyIdea: input.storyIdea || '', sceneId, sceneName: STORY_SCENES[sceneId].name, retryInstruction: attempt > 1 ? '上一批结构不完整、故事重复或品牌落点错误。本次必须修正。' : '' });
       if (!Array.isArray(result?.items) || result.items.length !== count) throw new Error(`模型必须返回 ${count} 条短剧结构`);
       const items = result.items.map((draft, offset) => buildStoryPrompt({ index: offset + 1, brandName, brief, sceneId, duration, template: input.template, priorities: input.priorities, storyIdea: input.storyIdea, subjectId: input.subjectId, draft }));
       if (new Set(items.map(item => item.beats ? JSON.stringify(item.beats) : `${item.dialogueA}|${item.dialogueB}|${item.adLine}`)).size !== items.length) throw new Error('短剧对白出现重复');
@@ -163,7 +164,7 @@ export async function draftSelectedStoryPrompts(input, provider) {
   if (!templates.length || templates.some(t => !t)) throw Error('请勾选模板');
   if (count < templates.length) throw Error('总条数不能少于勾选模板数，确保每个模板至少生成一条');
   const plans = templates.map((template, i) => ({ template, count: Math.floor(count / templates.length) + (i < count % templates.length ? 1 : 0) }));
-  const chunks = plans.flatMap(plan => Array.from({ length: Math.ceil(plan.count / 5) }, (_, i) => ({ template: plan.template, count: Math.min(5, plan.count - i * 5) })));
+  const chunks = plans.flatMap(plan => Array.from({ length: Math.ceil(plan.count / 5) }, (_, i) => ({ template: plan.template, count: Math.min(5, plan.count - i * 5), variantOffset: i * 5 })));
   const results = new Array(chunks.length);
   let cursor = 0;
   await Promise.all(Array.from({ length: Math.min(3, chunks.length) }, async () => {

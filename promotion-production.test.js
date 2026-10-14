@@ -102,3 +102,21 @@ test('改成豆包后不调用TokenDance文本准备，样片和剩余视频均�
   const remaining=service.promotionProduction.start(p.id,{requestId:'doubao-rest',mode:'remaining',jobId:sample.id});assert.equal((await finish(service.promotionProduction,remaining.id)).status,'submitted');
   assert.equal(service.queue.state.jobs.length,3);assert.ok(service.queue.state.jobs.every(j=>j.videoRoute==='doubao'));
 });
+
+test('直接批量生成无需样片，按所选数量提交全部视频',async t=>{
+ const {service,p,rewrites}=fixture(t);
+ const task=service.promotionProduction.start(p.id,{requestId:'direct-batch',mode:'batch'});
+ assert.equal((await finish(service.promotionProduction,task.id)).status,'submitted');
+ assert.equal(rewrites[0].items.length,3);
+ assert.equal(service.queue.state.jobs.length,3);
+ assert.ok(service.queue.state.jobs.every(j=>!j.isTrial));
+ assert.equal(p.trials.length,0);
+});
+
+test('人物带逛绑定行业工作人员、连续跟拍和设施讲解',async t=>{
+ const {service,p}=fixture(t);service.provider.routes=[{...route,id:'doubao'}];p.plans[0].videoRoute='doubao';p.plans[0].displayFormat='tour';p.plans[0].duration=10;p.promotion.personRole='咖啡师';
+ const task=service.promotionProduction.start(p.id,{requestId:'tour-batch',mode:'batch'});
+ assert.equal((await finish(service.promotionProduction,task.id)).status,'submitted');
+ assert.match(service.queue.state.jobs[0].prompt,/咖啡师/);assert.match(service.queue.state.jobs[0].prompt,/镜头.*跟随|连续跟拍/);
+ assert.match(service.queue.state.jobs[0].prompt,/双引号/);assert.match(service.queue.state.jobs[0].prompt,/不是顾客闲逛、模特摆拍/);
+});

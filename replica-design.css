@@ -765,3 +765,5 @@
 .reference-replica .editor.show-results>.results-heading { display: flex !important; }
 .reference-replica .replica-production>.check { max-width: 210px; line-height: 1.6; gap: 8px; }
 .reference-replica .replica-production>.check input { width: 18px; max-width: 18px; min-height: 18px; height: 18px; flex: 0 0 18px; padding: 0; }
+
+.reference-replica #clonePage[data-step="1"] .reference-hero:empty{background:linear-gradient(0deg,rgba(255,255,255,.65),rgba(255,255,255,.65)),url("/design-assets/visual-hero-v2.png") center/cover;border:1px solid #e2dfd7}.reference-replica #clonePage[data-step="1"] .reference-hero:empty:after{background:rgba(255,255,255,.94);padding:10px 16px;border-radius:8px;color:#5a6878}.reference-replica .analysis-illustration{width:170px;height:96px;object-fit:cover;border-radius:8px;margin-bottom:10px}

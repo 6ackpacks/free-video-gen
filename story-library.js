@@ -1,10 +1,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { ACQUISITION_STRATEGY, ACQUISITION_TEMPLATES } from './story-acquisition-templates.js';
 
 const catalog = JSON.parse(fs.readFileSync(new URL('./story-template-catalog.json', import.meta.url), 'utf8'));
-export const STORY_STRATEGIES = catalog.strategies;
-export const STORY_TEMPLATES = catalog.templates;
+export const STORY_STRATEGIES = [...catalog.strategies, ACQUISITION_STRATEGY];
+export const STORY_TEMPLATES = [...catalog.templates, ...ACQUISITION_TEMPLATES];
 
 export class StoryLibrary {
   constructor(file) { this.file = file; this.subjects = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : []; }

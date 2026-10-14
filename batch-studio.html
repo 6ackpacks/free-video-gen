@@ -58,7 +58,7 @@
           <div class="field"><label class="label">分辨率</label><select id="pairResolution"><option>480P</option><option>720P</option><option>1080P</option></select></div>
           <div class="directionbar"><div><label class="label">整批视频补充</label><textarea id="batchVideoDirection" placeholder="例如：整体动作更轻缓，镜头不要晃。留空即可。"></textarea><div class="hint">固定 BGM：配上优雅暧昧的音乐（纯音乐、无歌词、无对白）</div></div><button id="applyBatchDirection" class="btn alt">填入每条</button></div>
           <div id="imageGallery" class="gallery"></div>
-          <div class="btnrow" style="margin-top:14px"><button id="confirmImages" class="btn red grow">确认图片，先生成 1 条试片</button></div><div id="imageMessage"></div>
+          <div class="btnrow" style="margin-top:14px"> <span id="confirmImages" hidden aria-hidden="true"></span></div><div id="imageMessage"></div>
         </div></section>
         <section id="videoBatchCard" class="card hidden"><div class="head"><h2>视频批次</h2><div class="batchtools"><span id="videoProgress" class="step"></span><button id="downloadAll" class="btn red" disabled>一键下载全部</button></div></div><div class="body"><div id="videoJobs" class="preview"></div><div id="downloadMessage" class="download-message"></div></div></section>
       </div>

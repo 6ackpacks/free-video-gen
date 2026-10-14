@@ -106,28 +106,9 @@
     })();
     return dialog;
   }
-  const reviewRequests = new Set();
   async function reviewBatch(batchId, container) {
-    if (!container || reviewRequests.has(batchId)) return;
-    reviewRequests.add(batchId);
-    try {
-      const state = await api(`/batches/${batchId}/review`);
-      let area = container.previousElementSibling?.classList.contains('wb-review-first') ? container.previousElementSibling : null;
-      if (!state.required || state.approved) { area?.remove(); return; }
-      if (!area) { area = document.createElement('div'); area.className = 'wb-review-first'; container.before(area); }
-      const seen = localStorage.getItem('video-preview:seen:' + state.trialJobId) === '1';
-      const signature = JSON.stringify([batchId, state.ready, state.remaining, seen]);
-      if (area.dataset.signature === signature) return;
-      area.dataset.signature = signature;
-      area.innerHTML = `<strong>先试览，再继续批量生成</strong><p>${state.ready ? '试片已完成，请打开试览确认画面与动作。' : '正在生成第 1 条试片，剩余视频保留在本批等待确认。'}</p><div class="wb-toolbar"><button data-trial ${state.ready ? '' : 'disabled'}>打开试片</button><button data-approve ${state.ready && seen ? '' : 'disabled'}>满意，生成剩余 ${state.remaining} 条</button></div><small>${seen ? '已打开并播放试片，可以继续。' : '播放试片后可确认继续。'}</small>`;
-      area.querySelector('[data-trial]').onclick = () => open('/api/video/' + state.trialJobId);
-      area.querySelector('[data-approve]').onclick = async event => {
-        event.target.disabled = true;
-        try { await api(`/batches/${batchId}/review`, { method: 'POST', body: '{}' }); area.remove(); window.WorkbenchUI.toast('剩余视频已进入生成队列。'); }
-        catch (error) { window.WorkbenchUI.toast(error.message); event.target.disabled = false; }
-      };
-    } catch (error) { window.WorkbenchUI?.toast(error.message); }
-    finally { reviewRequests.delete(batchId); }
+    // Retain the public hook for old workbenches without rendering sample controls.
+    container?.parentElement?.querySelectorAll('.wb-review-first').forEach(el=>el.remove());
   }
   window.VideoPreview = { open, reviewBatch };
 })();

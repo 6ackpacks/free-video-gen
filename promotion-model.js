@@ -4,7 +4,7 @@ export const DISPLAY_FORMATS = {
   environment: [
     {id:'space',name:'空间全景',summary:'先看主要空间，再聚焦一处真实环境亮点。',rule:'平稳缓慢推进或小幅平移，展示参考图可见的空间层次；以一处已确认设施收尾。'},
     {id:'detail',name:'设施细节',summary:'用细节说明环境为什么值得来。',rule:'近景展示一处真实设施的材质与用途，镜头运动幅度小；画面证明所选卖点。'},
-    {id:'tour',name:'人物带逛',summary:'由同一位讲解者带观众认识环境。',people:1,speech:true,rule:'同一位讲解者在参考图可见区域小幅行走、自然指示一处设施；只讲一个环境亮点，不穿越照片外的未知房间。'},
+    {id:'tour',name:'人物带逛',summary:'由本行业工作人员带镜头参观门店，边走边介绍真实设施。',people:1,speech:true,rule:'一位本行业成年工作人员作为带逛者，把镜头当作到店顾客；先面向镜头招呼并作出邀请手势，再侧身慢走引导镜头跟随，到参考环境中一处真实设施旁停下，指向设施并用简短中文说明它的用途或已确认卖点。不是顾客闲逛、模特摆拍或站着微笑。使用连续跟拍，人物与设施同时可辨；仅在参考图支持的同一可见区域移动，不虚构相邻房间。'},
     {id:'pov',name:'第一视角体验',summary:'模拟顾客进入、停留和观察的感受。',rule:'人眼高度的小幅平稳移动，沿图片可见区域观察一个环境细节，不凭空扩建空间。'},
     {id:'dialogue',name:'问答看环境',summary:'用一个顾客问题介绍一个环境特点。',people:2,speech:true,rule:'一位顾客提出一个短问题，工作人员用一句已确认事实回答并指示对应设施；两人站位稳定，交替说话。'}
   ],
@@ -29,18 +29,26 @@ export function normalizePromotion(value={}){
   return {enabled:value.enabled===true,name:txt(value.name,100),audience:txt(value.audience,300),sellingPoints:txt(value.sellingPoints),copy:txt(value.copy,4000),serviceProcess:txt(value.serviceProcess),cta:txt(value.cta,300),personRole:txt(value.personRole,300),voice:txt(value.voice,200),startDate,endDate};
 }
 export function displayFormat(category,id){return DISPLAY_FORMATS[category]?.find(v=>v.id===id)||DISPLAY_FORMATS[category]?.[0];}
+export function presentationDirection(project,plan){
+ const category=promotionCategory(project),f=displayFormat(category,plan.displayFormat),b=project.promotion||{},seconds=Number(plan.duration)||10;
+ const budget=Math.max(4,Math.floor((seconds-2)*3));
+ const voice=f?.speech?'讲解由画面中的工作人员发声，嘴型和中文同步；对白放在双引号中，总计不超过'+budget+'个汉字，自然语速，台词讲到的设施必须在画面里。背景声低于人声，不叠加第二个旁白。':'轻微真实环境声，可配低音量背景音乐，让操作和空间细节成为重点。';
+ if(f?.id==='tour')return '工作人员身份：'+(b.personRole||'这家门店的本行业工作人员，着与职业匹配的整洁工作服')+'。保持同一成人身份与服装。镜头顺序：开场中景，工作人员看向镜头、自然招呼并抬手邀请；中段工作人员侧身带路，缓慢走两三步，镜头以到店顾客眼高平稳跟随，脸部和环境均可辨；末段在一个已确认设施旁停下，工作人员指向它，镜头顺势小幅转向设施并停留，同时用一句话介绍用途或卖点。'+(seconds<8?'短时长只保留邀请、一步引导和一句介绍，不强塞完整参观。':'以一个连贯镜头完成，不用空镜替代带逛动作，不切成跨房间蒙太奇。')+voice;
+ return (category==='environment'?'镜头顺序：开场清楚展示参考环境的主体空间；中段用一次平稳推进或平移展示所选设施及其与空间的关系；末段停留在可证明卖点的真实细节。保持门窗、通道和设施位置一致。':'镜头顺序：开场看清服务对象或产品；中段按已确认步骤展示一个关键操作，明确工作人员的手、工具与服务对象如何配合；末段展示该步骤完成后的真实可见状态，不拍未经证实的效果对比。')+'信息量按'+seconds+'秒精简。'+voice;
+}
 export function promotionVideoPrompt(project,plan){
   const b=project.promotion,format=displayFormat(promotionCategory(project),plan.displayFormat),m=project.materials||{};
   const lines=[`${plan.duration}秒，${plan.ratio||'9:16'}，制作${promotionCategory(project)==='environment'?'真实环境展示':'服务／产品展示'}短片。宣传主体：${b.name}。`,
+    presentationDirection(project,plan),
     `表现方式：${format.name}。${format.rule} 一个重点，开场展示主体，中段展示可见证据，收尾自然停留；动作和台词必须在时长内完成。`,
     `已确认卖点：${b.sellingPoints}。${b.serviceProcess?'真实服务步骤：'+b.serviceProcess+'。本条只展示其中一个可完成的关键步骤。':''}`,
     b.copy?`宣传文字：${b.copy}。根据镜头和时长选择一句核心表达，保留原文事实，不增加承诺。`:'从已确认卖点选择一个重点，不编造宣传事实。',
-    `参考素材保持真实空间、设施和产品外观；${m.personImageIds?.length?'人物图锁定同一人物身份与穿搭，不随机换人。':'人物按用户要求：'+(b.personRole||'自然得体的成年工作人员')+'。'}${format.people===2?'顾客与工作人员明确区分，轮流说话。':''}`,
+    `参考素材保持真实空间、设施和产品外观；${m.personImageIds?.length&&plan.referenceMode==='reference-image'?'人物图锁定同一人物身份与穿搭，不随机换人。':'人物按用户要求：'+(b.personRole||'自然得体的成年工作人员')+'。'}${format.people===2?'顾客与工作人员明确区分，轮流说话。':''}`,
     format.speech?`自然清晰中文，${b.voice||'温和自然语气'}，只说在当前时长内能自然完成的短句，画面与讲解对应。`:'画面为主，自然环境声，不强制人物说话。',
     b.cta?'收尾行动：'+b.cta+'。':'',b.startDate||b.endDate?`活动日期：${b.startDate||'未指定'}至${b.endDate||'未指定'}，只用于宣传内容，不作为监控时间戳。`:'',
     '保持图片中可见的空间，不新增门窗或房间。不虚构价格、功效、资质、实测结果或顾客评价。不套用监控噪点、暧昧互动或随机时间戳。准确品牌文字与标志不依赖模型重绘。',plan.creativeBrief||''];
   const prompt=lines.filter(Boolean).join('\n');
-  if(prompt.length>1650)throw Error('宣传资料过长，请精简本条卖点和宣传文字后生成样片');
+  if(prompt.length>1650)throw Error('宣传资料过长，请精简本条卖点和宣传文字后生成视频');
   return prompt;
 }
 export function promotionPrompt(project,plan){
@@ -49,6 +57,7 @@ export function promotionPrompt(project,plan){
   return [
     `宣传任务：${category==='environment'?'环境展示，帮助观众认识真实场所与到店体验':'服务／产品展示，帮助观众看懂提供什么、如何完成、有什么价值'}。主体：${b.name}。目标观众：${b.audience||'对本服务感兴趣的潜在顾客'}。`,
     `表现模板：${format.name}。${format.rule} 每条${plan.duration}秒、${plan.ratio||'9:16'}，围绕一个主要信息安排吸引注意→画面证明→简洁收尾；短片时长不足时减少信息，不加速堆叠动作。`,
+    presentationDirection(project,plan),
     `素材角色绑定：环境图=${(m.sceneImageIds||[]).join(',')||'本条底图'}；产品／服务图=${(m.productImageIds||[]).join(',')||'本条底图'}；人物图=${(m.personImageIds||[]).join(',')||'未指定真实人物'}。身份、包装、颜色、装修、门窗位置保持参考一致。人物图不是场景图，产品图不是背景图。`,
     `已确认卖点：${b.sellingPoints}。服务步骤：${b.serviceProcess||'仅展示用户资料或图片能证实的动作'}。人物身份与职责：${b.personRole||'按素材与模板指定'}。`,
     b.copy?`宣传原文：${b.copy}。保留关键事实；如需精简为口播，不能添加承诺、价格或未经确认的信息。`:'根据已确认卖点自动写一句自然宣传文案，不要求用户编写提示词。',

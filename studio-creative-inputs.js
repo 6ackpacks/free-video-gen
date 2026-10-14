@@ -3,12 +3,13 @@ const ids=value=>{if(value===undefined)return [];if(!Array.isArray(value)||value
 const text=(value,max=2000)=>String(value||'').trim().slice(0,max);
 export function creativeInputs(input,previous={}){
  const m=input.materials??previous.materials??{},b=input.productBrief??previous.productBrief??{},s=input.massageSpec??previous.massageSpec??{};
+ if(s.homeScene&&!['sofa','bed'].includes(s.homeScene))throw Error('请选择家庭客厅或卧室');
  const videoDirection=input.videoDirection??previous.videoDirection??'';
  if(!['','product-commercial','unboxing-review','continuous-commercial'].includes(videoDirection))throw Error('视频方向无效');
  const avatarMode=input.avatarMode??previous.avatarMode??'native';if(!['native','audio-driven'].includes(avatarMode))throw Error('口播生成方式无效');
  const audioUrl=text(input.audioUrl??previous.audioUrl,2000);
  if(audioUrl){const url=new URL(audioUrl);if(url.protocol!=='https:'||url.username||url.password)throw Error('配音地址须为不含账号密码的HTTPS链接');}
- return {videoDirection,avatarMode,audioUrl,promotion:normalizePromotion(input.promotion??previous.promotion),materials:{productImageIds:ids(m.productImageIds),personImageIds:ids(m.personImageIds),sceneImageIds:ids(m.sceneImageIds)},productBrief:{name:text(b.name,100),sellingPoints:text(b.sellingPoints),script:text(b.script,4000),voice:text(b.voice,200),music:text(b.music,200)},massageSpec:{bodyArea:text(s.bodyArea,80),position:text(s.position,200),contact:text(s.contact,300)}};
+ return {videoDirection,avatarMode,audioUrl,promotion:normalizePromotion(input.promotion??previous.promotion),materials:{productImageIds:ids(m.productImageIds),personImageIds:ids(m.personImageIds),sceneImageIds:ids(m.sceneImageIds)},productBrief:{name:text(b.name,100),sellingPoints:text(b.sellingPoints),script:text(b.script,4000),voice:text(b.voice,200),music:text(b.music,200)},massageSpec:{homeScene:text(s.homeScene,20),brandText:text(s.brandText,20),bodyArea:text(s.bodyArea,80),position:text(s.position,200),contact:text(s.contact,300)}};
 }
 export function creativePrompt(p,plan){
  if(p.promotion?.enabled&&plan)return promotionPrompt(p,plan);

@@ -1,0 +1,16 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import {homeMassageImagePrompt,homeMassageVideoPrompt,HOME_MASSAGE_PHOTOS} from './home-massage-photography.js';
+import {studioSeeds,StudioService} from './studio-service.js';
+import {StudioDomain} from './studio-domain.js';
+import {StudioImages} from './studio-images.js';
+
+const packs=[{id:'home-massage',name:'家庭按摩',engine:'reference-pairs',actions:[{id:'foot-care',name:'足部护理',actionText:'自然连续足部护理'}]}];
+function setup(t){const root=fs.mkdtempSync(path.join(os.tmpdir(),'home-photo-'));t.after(()=>fs.rmSync(root,{recursive:true,force:true}));const seeds=studioSeeds({state:{presets:[]}},packs).templates,domain=new StudioDomain(path.join(root,'studio.json'),seeds);const template=seeds.find(t=>t.actionId==='home-pov-full');const p=domain.saveProject({name:'上门护理',scene:'massage',industryId:'massage',templateTypeId:'massage:service',massageSpec:{homeScene:'bed'},materials:{sceneImageIds:['scene'],personImageIds:['person']},plans:[{templateId:template.id,count:1,duration:5,videoRoute:'doubao',resolution:'auto',ratio:'9:16',referenceMode:'reference-image',imageIds:['frame'],mapping:'one-to-one'}]});return {root,domain,p};}
+test('四种旧家庭第一视角构图进入现有护理动作库，不改成会所第三人称',t=>{const {p}=setup(t);assert.equal(HOME_MASSAGE_PHOTOS.length,4);const prompt=homeMassageImagePrompt(p,p.plans[0]);assert.match(prompt,/普通中国家庭卧室/);assert.match(prompt,/严格顾客第一人称/);assert.match(prompt,/单幅照片/);assert.match(prompt,/人物图只用于锁定/);assert.ok(!prompt.includes('伊趣舒心'));assert.match(homeMassageVideoPrompt(p,p.plans[0]),/任一时刻至少一只手接触/);});
+test('品牌、场景与构图保存重启，改变服务环境会使旧生成内容失效',t=>{const {root,domain,p}=setup(t);p.plans[0].prompts=['已完成内容'];domain.save();const restored=new StudioDomain(path.join(root,'studio.json'));assert.equal(restored.project(p.id).massageSpec.homeScene,'bed');restored.saveProject({...p,massageSpec:{...p.massageSpec,homeScene:'sofa',brandText:'用户品牌'},plans:p.plans});assert.equal(restored.project(p.id).plans[0].promptsDirty,true);assert.match(homeMassageImagePrompt(restored.project(p.id),p.plans[0]),/用户品牌/);});
+test('实际底图请求使用恢复的上门照片规则，正确绑定家庭图与人物图',async t=>{const {root,domain,p}=setup(t);let sent;const service={domain,provider:{keyframeConfigured:true,submitKeyframe:async(prompt,options)=>{sent={prompt,options};return {id:'upstream'};}},references:{get:id=>({id}),ensure:async id=>'https://example.org/'+id+'.png'}};const images=new StudioImages(path.join(root,'images.json'),service);t.after(()=>clearInterval(images.timer));images.create({projectId:p.id,planId:p.plans[0].id,count:1});await new Promise(r=>setTimeout(r,20));assert.match(sent.prompt,/普通中国家庭卧室/);assert.match(sent.prompt,/第一人称/);assert.deepEqual([...sent.options.referenceUrls].sort(),['https://example.org/person.png','https://example.org/scene.png']);assert.match(sent.prompt,/附件1为技师人物身份/);});
+test('上门护理视频描述直接从固定结构编写，不再依赖外部文本服务',async t=>{const {domain,p}=setup(t);const service=Object.create(StudioService.prototype);Object.assign(service,{domain,provider:{routes:[],rewritePrompts:async()=>{throw Error('不应调用');}},references:{get:id=>({id})}});await service.generate(p.id);assert.match(p.plans[0].prompts[0],/普通中国家庭/);assert.match(p.plans[0].prompts[0],/顾客第一人称/);});

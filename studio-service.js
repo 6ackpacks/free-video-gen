@@ -1,4 +1,6 @@
+import {acquisitionVariant} from './story-acquisition-templates.js';
 import {monitorCustomizationPrompt} from './monitor-customization.js';
+import {HOME_MASSAGE_PHOTOS,homeMassageVideoPrompt,upgradeHomeMassageTemplates} from './home-massage-photography.js';
 import {upgradeServiceRecipes} from './service-recipes.js';
 import {VideoProduction} from './video-production.js';
 import {monitorVideoRules} from './image-transforms.js';
@@ -25,7 +27,8 @@ export function studioSeeds(workspace,packs=listContentPacks()) {
   for(const scene of scenes.filter(s=>s.packId)){
     const pack=packs.find(p=>p.id===scene.packId);
     const actions=pack.actionLibrary?loadActionTemplates(contentPackActionDirectory(pack),{expectedCount:pack.expectedActionCount}):pack.actions.map(a=>({...a,actionText:a.actionText||a.description||(pack.id==='home-massage'?(a.name==='连续足部按摩'?'成年服务人员对成年顾客进行自然、连续的足部按摩，保留人物起始姿态和接触位置。':'成年服务人员对成年顾客进行轻柔的肩颈放松，保留起始姿态和空间布局。'):a.name)}));
-    for(const action of actions)templates.push({id:scene.id+':'+action.id,name:action.name,scene:scene.id,packId:pack.id,actionId:action.id,actionTemplate:action,description:action.actionText,actions:[action.actionText],people:String(action.people||2)+' 位成年人',duration:5,mapping:scene.id==='massage'?'one-to-one':'common',imageRules:scene.id==='massage'?'每条视频独立底图，须包含成年服务人员与成年顾客、正确接触部位与起始姿态。':'保留真实空间、门的位置、构图、装修颜色与光线；仅加入自然的成年人物动作。'});
+    if(pack.id==='home-massage')actions.push(...HOME_MASSAGE_PHOTOS.map(v=>({...v,actionText:'上门足部按摩；'+v.shot,people:2,homePhotoVersion:1})));
+    for(const action of actions)templates.push({id:scene.id+':'+action.id,name:action.name,scene:scene.id,packId:pack.id,actionId:action.id,actionTemplate:action,description:action.actionText,actions:[action.actionText],people:String(action.people||2)+' 位成年人',duration:5,mapping:scene.id==='massage'?'one-to-one':'common',imageRules:scene.id==='massage'?'上门服务在普通中国家庭客厅或卧室中拍摄，采用手机随手拍质感；足部护理为顾客第一人称，技师面部、上半身、双手和服务接触关系清楚。只用完整单幅照片，不用九宫格或会所护理棚拍。':'保留真实空间、门的位置、构图、装修颜色与光线；仅加入自然的成年人物动作。'});
   }
   for(const t of STORY_TEMPLATES)templates.push({id:'story:'+t.id,name:t.name,scene:'story',description:t.rules||t.description||t.name,storyTemplate:t,actions:[],people:'按脚本确定成年人物',duration:15,mapping:'shots',imageRules:'按已确认分镜准备角色与商品图片，不从图片文件名推断品牌事实。'});
   for(const p of workspace.state.presets||[])if(p.kind==='replica')templates.push({id:p.id,name:p.name,scene:'',description:p.replica.template,replica:p.replica,source:p.sourceId?'replica':'my',originSourceId:p.sourceId||'',duration:p.settings?.duration||5,mapping:'common',actions:(p.replica.beats||[]).map(b=>b.action),imageRules:'可替换初始画面与模板变量，保留已确认节奏。',legacyPresetId:p.id,actionPack:structuredClone((workspace.state.actionPacks||[]).find(a=>a.id===p.settings?.actionPackId)||null)});
@@ -37,6 +40,7 @@ export class StudioService {
     const seed=studioSeeds(workspace);this.scenes=seed.scenes;
     this.domain=new StudioDomain(path.join(root,'data','studio.json'),seed.templates);
     upgradeServiceRecipes(this.domain.state.templates,seed.templates);
+    upgradeHomeMassageTemplates(this.domain.state.templates,seed.templates);
     for(const template of this.domain.state.templates)if(template.legacyPresetId&&template.version===1&&template.description===template.name&&template.replica?.template){template.description=template.replica.template;template.versions[0].description=template.description;}
     for(const seedTemplate of seed.templates)if(seedTemplate.actionPack){const t=this.domain.state.templates.find(t=>t.id===seedTemplate.id);if(t?.version===1&&t.actionPack===undefined){t.actionPack=structuredClone(seedTemplate.actionPack);t.versions[0].actionPack=structuredClone(seedTemplate.actionPack);}}
     this.drafts=new DraftTasks(path.join(root,'data','studio-drafts.json'),(input,report)=>this.generate(input.projectId,report,input.mode));
@@ -58,7 +62,7 @@ export class StudioService {
     return [...images,...videos,...brands];
   }
   works(){return this.queue.state.jobs.map(j=>({...j,sceneId:j.projectId?j.sceneId:j.packId==='ktv-business'?'ktv':j.packId==='foot-spa-store'?'footspa':j.skillId==='story-ad'?'story':j.skillId==='paired-reference'?'massage':j.sceneId,templateId:j.templateId||(j.actionId?`${j.packId||'historical'}:${j.actionId}`:undefined),templateName:j.templateName||j.actionName||j.skillName||j.actionTemplate?.name||'历史未分类'}));}
-  overview(){const catalog=buildCatalog(this.domain.state.templates,this.domain.state.industries);return {...catalog,scenes:[...this.scenes,...catalog.industries.filter(i=>i.id!=='general'&&!this.scenes.some(s=>s.id===i.id)).map(i=>({...i,description:i.name,engine:'generic'}))],templates:this.domain.state.templates.map(t=>({...t,example:t.packId&&t.actionId?this.presentation.example(t.packId,t.actionId,this.queue.state.jobs):null,referenceClips:t.packId==='foot-spa-store'?footspaReferences(this.root,t.actionId):[]})),footspaReferenceClips:footspaReferences(this.root),footspaSources:FOOTSPA_REFERENCE_CATALOG.sources,projects:this.domain.state.projects,assets:this.assets(),actionPacks:this.workspace.state.actionPacks||[],imageTasks:this.images.tasks.map(t=>({id:t.id,projectId:t.projectId,planId:t.planId,templateId:t.templateId,monitor:t.monitor,createdAt:t.createdAt,status:t.status,items:t.items.map(i=>({id:i.id,name:i.name,status:i.status,error:i.error,providerId:i.providerId,referenceIdResult:i.referenceIdResult}))})),routes:this.provider.routes,keyframeConfigured:this.provider.keyframeConfigured,settings:this.domain.state.settings};}
+  overview(){const catalog=buildCatalog(this.domain.state.templates,this.domain.state.industries);return {...catalog,scenes:[...this.scenes,...catalog.industries.filter(i=>i.id!=='general'&&!this.scenes.some(s=>s.id===i.id)).map(i=>({...i,description:i.name,engine:'generic'}))],templates:this.domain.state.templates.map(t=>({...t,example:t.packId&&t.actionId?this.presentation.example(t.packId,t.actionId,this.queue.state.jobs):null,referenceClips:t.packId==='foot-spa-store'?footspaReferences(this.root,t.actionId):structuredClone(t.referenceClips||[])})),footspaReferenceClips:footspaReferences(this.root),footspaSources:FOOTSPA_REFERENCE_CATALOG.sources,projects:this.domain.state.projects,assets:this.assets(),actionPacks:this.workspace.state.actionPacks||[],imageTasks:this.images.tasks.map(t=>({id:t.id,projectId:t.projectId,planId:t.planId,templateId:t.templateId,monitor:t.monitor,createdAt:t.createdAt,status:t.status,items:t.items.map(i=>({id:i.id,name:i.name,status:i.status,error:i.error,providerId:i.providerId,referenceIdResult:i.referenceIdResult}))})),routes:this.provider.routes,keyframeConfigured:this.provider.keyframeConfigured,settings:this.domain.state.settings};}
   project(id){const p=this.domain.project(id);return {...p,readiness:this.domain.readiness(p,this.provider.routes,this.references),adopted:this.domain.adopted(p,this.queue)};}
   async generate(id,report=()=>{},mode='all',only=null){
     const p=this.domain.project(id);
@@ -68,13 +72,17 @@ export class StudioService {
       if(only&&only.planId!==plan.id)continue;
       if(!only&&(mode==='missing'||mode==='dirty'&&!plan.promptsDirty)&&plan.prompts.length===plan.count&&plan.prompts.every(v=>v.trim())){completed+=plan.count;report({completed,total});continue;}
       const signature=plan.signature;
+      if(plan.snapshot.packId==='home-massage'){
+        const prompts=Array.from({length:plan.count},(_,i)=>plan.prompts[i]||'');for(let i=0;i<plan.count;i++)if((!only||only.index===i)&&(mode!=='missing'||!prompts[i].trim()))prompts[i]=homeMassageVideoPrompt(p,plan);
+        plan.prompts=prompts;plan.promptsDirty=false;this.domain.save();completed+=only?1:plan.count;report({completed,total});continue;
+      }
       if(p.promotion?.enabled&&promotionCategory(p)&&plan.videoRoute==='doubao'){
         const prompts=Array.from({length:plan.count},(_,i)=>plan.prompts?.[i]||'');
         for(let i=0;i<plan.count;i++)if((!only||only.index===i)&&(mode!=='missing'||!prompts[i].trim()))prompts[i]=promotionVideoPrompt(p,plan);
         plan.prompts=prompts;plan.promptsDirty=false;plan.scriptConfirmed=false;this.domain.save();completed+=only?1:plan.count;report({completed,total});continue;
       }
       const monitor=plan.snapshot.packId==='foot-spa-store'&&plan.snapshot.actionTemplate;
-      const baseFor=index=>p.promotion?.enabled&&promotionCategory(p)?promotionPrompt(p,plan)+(plan.creativeBrief?'\n本条补充：'+plan.creativeBrief:''):(monitor?footspaActionPrompt(plan.snapshot.actionTemplate,{duration:plan.duration,ratio:plan.ratio,personImages:!!p.materials?.personImageIds?.length,index,lockFrame:!!slotsFor(plan)[index-1]?.length}):plan.content||plan.snapshot.description)+'\n已确认动作顺序：'+plan.snapshot.actions.join('；')+'\n'+(plan.content?'用户编辑的动作补充：'+plan.content+'\n':'')+creativePrompt(p,plan)+(monitor?'\n'+monitorCustomizationPrompt(p,{video:true,lockedFrame:!!slotsFor(plan)[index-1]?.length}):'')+(monitor&&p.peopleBrief&&!plan.imageIds?.length?'\n人物造型补充（不得改变模板人数）：'+p.peopleBrief:'');
+      const baseFor=index=>p.promotion?.enabled&&promotionCategory(p)?promotionPrompt(p,plan)+(plan.creativeBrief?'\n本条补充：'+plan.creativeBrief:''):(monitor?footspaActionPrompt(plan.snapshot.actionTemplate,{duration:plan.duration,ratio:plan.ratio,personImages:!!p.materials?.personImageIds?.length,index,lockFrame:!!slotsFor(plan)[index-1]?.length}):plan.content||plan.snapshot.description)+'\n已确认动作顺序：'+plan.snapshot.actions.join('；')+'\n'+(plan.content?'用户编辑的动作补充：'+plan.content+'\n':'')+creativePrompt(p,plan)+(monitor?'\n'+monitorCustomizationPrompt(p,{video:true,lockedFrame:!!slotsFor(plan)[index-1]?.length}):'')+(monitor&&p.peopleBrief&&!plan.imageIds?.length?'\n人物造型补充（不得改变模板人数）：'+p.peopleBrief:'')+(p.scene==='story'?'\n'+acquisitionVariant(plan.snapshot.storyTemplate,index-1):'');
       if(monitor){
         const prompts=Array.from({length:plan.count},(_,i)=>plan.prompts?.[i]||'');
         for(let i=0;i<plan.count;i++)if((!only||only.index===i)&&!prompts[i].trim())prompts[i]=baseFor(i+1);

@@ -44,7 +44,7 @@
     const {context,center,compose}=createFrame(main);cards[0].querySelector('h2').textContent='01 · 宣传主体';context.append(cards[0]);collapse(cards[0]);dock(context,['confirmSubject','contextMessage']);
     const templateCard=cards[1],timeFields=templateCard.querySelector('.cols');cards[3].querySelector('.body').prepend(timeFields);
     compose.append(cards[2],cards[3]);collapse(cards[2],true);const quick=document.createElement('details');quick.className='wb-quick';quick.innerHTML='<summary>快捷生成（跳过提示词审核）</summary>';quick.append(byId('direct'));cards[3].querySelector('.body').append(quick);byId('draft').classList.remove('alt');byId('draft').classList.add('red');dock(compose,['draft','run','draftMessage','runMessage']);
-    center.append(pane('templates','选择模板',[templateCard],'先选择宣传主体，再勾选适合的写法。'),pane('prompts','提示词审核',[right.children[0]],'点击“确认模板，生成提示词”后，结果会出现在这里，可选择、修改和删除草稿。'),pane('videos','成片与进度',[byId('jobsCard')],'先生成 1 条试片，试览确认后继续剩余视频。所有成片支持预览与下载。'));
+    center.append(pane('templates','选择模板',[templateCard],'先选择宣传主体，再勾选适合的写法。'),pane('prompts','提示词审核',[right.children[0]],'点击“确认模板，生成提示词”后，结果会出现在这里，可选择、修改和删除草稿。'),pane('videos','成片与进度',[byId('jobsCard')],'查看已生成的视频。所有成片支持预览与下载。'));
     layout.remove();return 'templates';
   }
   function setupPaired() {
@@ -54,14 +54,14 @@
     const parameterBody=parameterCard.querySelector('.body');for(const id of ['pairRoute','pairResolution'])parameterBody.append(byId(id).closest(id==='pairRoute'?'.cols':'.field'));
     parameterBody.append(imageCard.querySelector('.directionbar'));collapse(parameterCard);
     const confirmDock=dock(compose,['confirmImages','imageMessage']);confirmDock.dataset.needsImages='true';
-    center.append(pane('prompts','01 提示词',[promptCard],'在左侧完成设定后，生成整批提示词。你可以只选其中几条生成图片。'),pane('images','02 图片审核',[imageCard],'选用提示词并确认后，开始生成图片。支持放大、修改视频方向和重生成。'),pane('videos','03 成片与进度',[byId('videoBatchCard')],'确认图片后先生成 1 条试片，试览满意后继续剩余视频。所有任务会保存到素材与历史。'));
+    center.append(pane('prompts','01 提示词',[promptCard],'在左侧完成设定后，生成整批提示词。你可以只选其中几条生成图片。'),pane('images','02 图片审核',[imageCard],'选用提示词并确认后，开始生成图片。支持放大、修改视频方向和重生成。'),pane('videos','03 成片与进度',[byId('videoBatchCard')],'确认图片后查看生成的视频。所有任务会保存到素材与历史。'));
     panel.remove();return 'prompts';
   }
   function setupStore() {
     const main=byId('studioPage'),workspace=main.querySelector('.workspace'),cards=[...workspace.children],trial=main.querySelector('.trial'),history=main.querySelector('.history');
     const {context,center,compose}=createFrame(main);context.append(cards[0]);collapse(cards[0]);compose.append(cards[2]);cards[2].querySelector('h2').textContent='03 · 生成设置';
     const promptField=byId('promptParts').closest('.field'),promptCard=document.createElement('section');promptCard.className='card';promptCard.innerHTML='<details><summary class="head">查看模板的核心约束</summary><div class="body"></div></details>';promptCard.querySelector('.body').append(promptField,byId('previewPrompt'));
-    dock(compose,['generateActionPrompts','createTrial']);center.append(pane('templates','选择动作',[cards[1]],'固定底图后选择兼容动作，可多选或随机轮换。'),pane('prompts','提示词生成',[promptCard],'模板作为生成规则交给大模型，结果可编辑后用于试片。'),pane('videos','成片与进度',[trial],'所选提示词已提交，生成完成后可试览与下载。'),pane('history','生成历史',[history],'历史批次会保留，可继续检查与下载。'));
+    dock(compose,['generateActionPrompts','createTrial']);center.append(pane('templates','选择动作',[cards[1]],'固定底图后选择兼容动作，可多选或随机轮换。'),pane('prompts','提示词生成',[promptCard],'模板作为生成规则交给大模型，结果可编辑后用于视频。'),pane('videos','成片与进度',[trial],'所选提示词已提交，生成完成后可试览与下载。'),pane('history','生成历史',[history],'历史批次会保留，可继续检查与下载。'));
     workspace.remove();return 'templates';
   }
   function dialog(title) { const d=document.createElement('dialog');d.className='wb-dialog';d.innerHTML=`<div class="wb-dialog-head"><h2>${esc(title)}</h2><button class="btn alt">关闭</button></div><div class="wb-dialog-body"></div>`;d.querySelector('button').onclick=()=>d.close();d.addEventListener('close',()=>{d.remove();document.dispatchEvent(new CustomEvent('workbench:dialog',{detail:{open:!!document.querySelector('.wb-dialog[open]')}}))});document.body.append(d);d.showModal();document.dispatchEvent(new CustomEvent('workbench:dialog',{detail:{open:true}}));return d; }

@@ -51,14 +51,14 @@ export class PromotionProduction {
     if(!promotionCategory(p)||!p.promotion?.enabled)throw Error('请先确认环境或服务宣传资料');
     const active=this.busy(projectId);if(active)return this.get(active.id);
     if(this.service.queue.state.jobs.some(j=>j.projectId===p.id&&!['complete','error','cancelled'].includes(j.status)))throw Error('本项目正在制作视频，请等待当前任务完成');
-    const trial=input.mode!=='remaining',plan=p.plans.find(v=>v.id===input.planId)||p.plans[0],index=Number(input.index??0);
-    if(!plan||!Number.isInteger(index)||index<0||index>=plan.count)throw Error('请选择有效样片');
+    const trial=!['remaining','batch'].includes(input.mode),plan=p.plans.find(v=>v.id===input.planId)||p.plans[0],index=Number(input.index??0);
+    if(!plan||!Number.isInteger(index)||index<0||index>=plan.count)throw Error('请选择有效视频模板');
     let check=p;
     if(trial){const ids=slotsFor(plan)[index];check={...p,plans:[{...plan,count:1,mapping:'shots',shotImages:[ids],imageIds:ids,prompts:['制作准备'],promptsDirty:false}]};}
     else check={...p,plans:p.plans.map(v=>({...v,prompts:Array(v.count).fill('制作准备'),promptsDirty:false}))};
     const errors=this.service.domain.readiness(check,this.service.provider.routes,this.service.references).errors;
     if(errors.length)throw Error(errors.join('；'));
-    if(!trial){
+    if(input.mode==='remaining'){
       const t=p.trials.find(v=>v.jobId===input.jobId),job=this.service.queue.state.jobs.find(j=>j.id===input.jobId);
       if(!t||job?.status!=='complete'||!job.outputs?.length)throw Error('请先完成并确认一条样片');
       const current=p.plans.find(v=>v.id===t.planId);
@@ -69,13 +69,13 @@ export class PromotionProduction {
     }
     for(const v of p.plans)if(v.promptsDirty){v.prompts=[];v.promptsDirty=false;}
     this.service.domain.save();
-    const task={id:randomUUID(),projectId,requestId,mode:trial?'sample':'remaining',videoRoute:plan.videoRoute,contentSource:plan.videoRoute==='doubao'?'template':'text-model',failureStage:'content',planId:plan.id,index,status:'preparing',createdAt:new Date().toISOString(),inputFingerprint:inputFingerprint(p)};
+    const task={id:randomUUID(),projectId,requestId,mode:trial?'sample':input.mode==='batch'?'batch':'remaining',videoRoute:plan.videoRoute,contentSource:plan.videoRoute==='doubao'?'template':'text-model',failureStage:'content',planId:plan.id,index,status:'preparing',createdAt:new Date().toISOString(),inputFingerprint:inputFingerprint(p)};
     this.tasks.unshift(task);this.save();
     // Persist the intent before rewriting. The continuation runs even if the browser closes.
     Promise.resolve().then(async()=>{
       await this.service.generate(projectId,progress=>{Object.assign(task,progress);this.save();},'missing',trial?{planId:plan.id,index}:null);
       const current=this.service.domain.project(projectId);
-      if(inputFingerprint(current)!==task.inputFingerprint)throw Error('制作资料已变更，请重新生成样片');
+      if(inputFingerprint(current)!==task.inputFingerprint)throw Error('制作资料已变更，请重新生成视频');
       task.failureStage='video-submit';this.save();
       const batch=this.service.submit({projectId,trial,planId:plan.id,index,requestId});
       task.batchId=batch.id;task.status='submitted';

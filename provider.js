@@ -42,7 +42,7 @@ export async function loadProvider() {
     { id: 'apimart', name: 'APIMart', model: apimart?.model || 'grok-imagine-1.5-video-ext', configured: Boolean(apimart), referenceMode: 'visual-brief', resolutions: ['480P', '720P'], duration: { min: 6, max: 6 } },
     { id: 'wan-tokendance', name: 'TokenDance', model: 'wan3.0-video', configured: wan['wan-tokendance'].configured, referenceMode: 'reference-image', resolutions: ['480P', '720P', '1080P'], duration: { min: 2, max: 30 } },
     { id: 'wan-aliyun', name: '阿里云百炼', model: 'wan3.0-video', configured: wan['wan-aliyun'].configured, referenceMode: 'reference-image', resolutions: ['480P', '720P', '1080P'], duration: { min: 2, max: 30 } },
-    { id: 'doubao', name: '豆包账号池', model: doubao.model, configured: true, referenceMode: 'reference-image', resolutions: ['由豆包决定'], duration: { min: 5, max: 10, values: [5, 10] } }
+    { id: 'doubao', name: '豆包账号池', model: doubao.model, configured: true, nativeAudio: true, referenceMode: 'reference-image', resolutions: ['由豆包决定'], duration: { min: 5, max: 15, values: [5, 10, 15] } }
   ];
   for(const route of routes)route.nativeAudio=route.nativeAudio||['wan-tokendance','wan-aliyun','doubao'].includes(route.id);
   return {
