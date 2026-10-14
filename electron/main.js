@@ -117,7 +117,6 @@ async function bootstrap() {
   globalThis.workbenchAccountState=()=>store.list(running());
   globalThis.workbenchOpenAccount=async id=>{store.get(id);focusWorkbench();await window.webContents.executeJavaScript(`window.StudioShell.openAccounts(${JSON.stringify(id)})`,true);};
   const createExecutionView=async id=>{const prior=executionViews.get(id);if(prior&&!prior.isDestroyed())return prior;const account=store.get(id);const accountSession=session.fromPartition(accountPartition(id));await accountSession.setProxy(account.proxy?{proxyRules:account.proxy}:{mode:'system'});const view=new BrowserWindow({show:false,width:1280,height:900,title:'豆包后台执行',webPreferences:{partition:accountPartition(id),sandbox:true,contextIsolation:true,nodeIntegration:false,backgroundThrottling:false}});view.webContents.setWindowOpenHandler(()=>({action:'deny'}));view.webContents.on('will-navigate',(e,url)=>{if(!/^https:\/\//.test(url))e.preventDefault();});executionViews.set(id,view);return view;};
-  app.once('before-quit',()=>{for(const view of executionViews.values())if(!view.isDestroyed())view.destroy();});
   const nativeVideo=createNativeVideoAdapter({store,createView:createExecutionView,openAccount:async id=>{selectedId=id;await createView(id);await globalThis.workbenchOpenAccount(id);fitSelected();},directory:app.getPath('userData')});
   globalThis.workbenchNativeVideo=nativeVideo;
   await import('../server.js');
@@ -152,6 +151,9 @@ async function bootstrap() {
 }
 
 if (singleInstance) app.whenReady().then(bootstrap).catch(error => { bootLog(`boot failed: ${error.stack || error}`); app.quit(); });
-let quitFlushed=false;
-app.on('before-quit',event=>{if(quitFlushed)return;event.preventDefault();Promise.all((store?.state.accounts||[]).map(async account=>{const saved=session.fromPartition(accountPartition(account.id));saved.flushStorageData();await saved.cookies.flushStore();})).catch(error=>bootLog('session save failed: '+error.message)).finally(()=>{quitFlushed=true;app.quit();});});
+let quitFlushed=false,quitPending=false;
+app.on('before-quit',event=>{if(quitFlushed)return;event.preventDefault();if(quitPending)return;quitPending=true;
+ const flush=Promise.all((store?.state.accounts||[]).map(async account=>{const saved=session.fromPartition(accountPartition(account.id));saved.flushStorageData();await saved.cookies.flushStore();})).catch(error=>bootLog('session save failed: '+error.message));
+ let timeout;Promise.race([flush,new Promise(resolve=>{timeout=setTimeout(()=>{bootLog('session flush timed out during exit');resolve();},5000);})]).finally(()=>{clearTimeout(timeout);quitFlushed=true;for(const view of executionViews.values())if(!view.isDestroyed())view.destroy();app.quit();setTimeout(()=>app.exit(0),3000).unref();});
+});
 app.on('window-all-closed', () => app.quit());
