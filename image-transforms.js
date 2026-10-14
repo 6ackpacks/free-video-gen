@@ -2,7 +2,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 
-const IMAGE_PROMPT = timestamp => `把参考图加工为真实实拍的老旧监控摄像头画面。严格保留原图中的空间、人物、物件、门、通道与装饰，不增加、不删除、不替换场景内容。只改变拍摄机位、透视与成像质感：摄像头固定安装在靠近天花板的高处角落，以约 45 度较大俯角向下拍摄；使用老式轻微广角监控镜头，形成明显纵深透视和轻微广角畸变。画面轻微模糊，灰蒙蒙一层雾感，低饱和、低对比，带自然噪点、压缩痕迹和轻微曝光不完美，保持彩色、真实实拍感，不要电影感。左上角加入略有老旧感的白色监控时间文字：“${timestamp}”“通道01”。时间文字清晰但不过度醒目。`;
+export const MONITOR_CAMERA_STYLE = `只改变拍摄机位、透视与成像质感：摄像头固定安装在靠近天花板的高处角落，以约 45 度较大俯角向下拍摄；使用老式轻微广角监控镜头，形成明显纵深透视和轻微广角畸变。画面轻微模糊，灰蒙蒙一层雾感，低饱和、低对比，带自然噪点、压缩痕迹和轻微曝光不完美，保持彩色、真实实拍感，不要电影感。`;
+
+const IMAGE_PROMPT = timestamp => `把参考图加工为真实实拍的老旧监控摄像头画面。严格保留原图中的空间、人物、物件、门、通道与装饰，不增加、不删除、不替换场景内容。${MONITOR_CAMERA_STYLE}左上角加入略有老旧感的白色监控时间文字：“${timestamp}”“通道01”。时间文字清晰但不过度醒目。`;
 
 export class ImageTransformManager {
   constructor(directory, provider, references) {

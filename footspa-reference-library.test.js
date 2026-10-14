@@ -31,6 +31,7 @@ test('人物图选填且合成首帧实际携带门店与人物附件，不拿�
  assert.deepEqual(task.items[0].referenceIds,['scene','face']);assert.ok(task.items[0].prompt.includes(action.startPose));assert.ok(task.items[0].prompt.includes('不能把肖像当作背景'));
  p.materials.personImageIds=[];
  assert.deepEqual(images.create({projectId:'p',planId:'plan',count:1}).items[0].referenceIds,['scene']);
+ assert.match(task.items[0].prompt,/45 度/);assert.match(task.items[0].prompt,/通道01/);assert.match(task.items[0].prompt,/不要电影感/);assert.doesNotMatch(task.items[0].prompt,/不添加假时间戳/);
 });
 test('制作台批量提示词实际使用参考动作规则，时长、核心动作和结尾传到改写模型',async()=>{
  const action=loadActionTemplates().find(a=>a.id==='action-16');let input;

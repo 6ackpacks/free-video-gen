@@ -98,6 +98,7 @@ with sync_playwright() as pw:
   assert page.locator('.app-sidebar [data-app-nav=assets]').count()==0
   page.locator('#studioGenerateImage').click();expect(page.locator('#studioImagePreview .studio-image-loading')).to_be_visible();expect(page.locator('#studioImagePreview')).to_contain_text('正在生成AI底图');page.screenshot(path=str(OUT/'image-loading.png'),full_page=True)
   image_state='complete';expect(page.locator('#studioImagePreview .studio-image-loading')).to_have_count(0);expect(page.locator('.studio-image-thumb')).to_have_count(4);assert 'new-ai-image' in project['materials']['sceneImageIds'];assert not next(a for a in catalog['assets'] if a['id']=='new-ai-image')['confirmed']
+  page.locator('[data-plan-image]').select_option('new-ai-image');expect(page.locator('#studioSubmit')).to_be_enabled();assert next(a for a in catalog['assets'] if a['id']=='new-ai-image')['confirmed'];assert project['plans'][0]['mapping']=='common'
   page.set_viewport_size({'width':390,'height':844});page.wait_for_timeout(500);assert page.evaluate('document.documentElement.scrollWidth<=innerWidth');page.screenshot(path=str(OUT/'production-mobile.png'),full_page=True)
   assert not errors,errors
   print(json.dumps({'checks':['两页导航与选择保留','双图上传预览与素材缩略图','原图直接复用多条视频，不强制生图','选择模型后一次提交，提示词后台自动准备','成片之前不显示提示词，成片之后可编辑并保存','同页视频提交失败重试及稳定播放器','手机无横向溢出'],'paidRequests':0,'pageErrors':errors},ensure_ascii=False))

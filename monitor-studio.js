@@ -42,7 +42,7 @@ export function renderMonitorStudio(ctx) {
       (!allowed || allowed.includes(t.id)),
   );
   let selectedImage =
-      localStorage.getItem("monitor:image:" + p.id) ||
+      p.commonImageId || localStorage.getItem("monitor:image:" + p.id) ||
       projectImageIds(p)[0] ||
       "",
     search = "",
@@ -81,6 +81,7 @@ export function renderMonitorStudio(ctx) {
     );
     localStorage.setItem("monitor:pending:" + p.id, id);
     drawImages();
+    drawPlans();
   };
   const asset = (id) => data.assets.find((a) => a.id === id),
     template = (id) => templates.find((t) => t.id === id),
@@ -330,7 +331,7 @@ export function renderMonitorStudio(ctx) {
           `<div><img src="${esc(asset(id)?.previewUrl || "")}" alt="人物参考"><button data-remove-person="${id}" aria-label="移除人物图">×</button></div>`,
       )
       .join("");
-    const pending = pendingImage === selectedImage;
+    const pending = pendingImage === selectedImage || current?.confirmed === false;
     app.querySelector("#studioImageHint").textContent = pending
       ? "预览生成结果；点击“采用这张底图”后才用于视频，原图保留。"
       : current
@@ -435,8 +436,10 @@ export function renderMonitorStudio(ctx) {
       (e) =>
         (e.onchange = async () => {
           const plan = p.plans.find((v) => v.id === e.dataset.planImage);
+          if(e.value){await api('/studio/assets/'+e.value,{method:'PATCH',body:{confirmed:true}});await refreshData();if(pendingImage===e.value){pendingImage='';localStorage.removeItem('monitor:pending:'+p.id);}}
           assignOriginal(plan, e.value);
           await saveProject();
+          drawImages();
           drawPrompts();
           updateButtons();
         }),
@@ -661,6 +664,7 @@ export function renderMonitorStudio(ctx) {
     drawImages();
     drawPlans();
     drawPrompts();
+    updateButtons();
   }
   async function generatePrompts() {
     if (promptStarting || directDraft?.status === "running") return;
