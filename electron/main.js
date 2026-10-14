@@ -3,6 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { app, BrowserWindow, WebContentsView, ipcMain, session, shell } from 'electron';
 import { AccountStore } from './account-store.js';
+import {createNativeVideoAdapter} from './video-adapter.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.dirname(here);
@@ -114,6 +115,8 @@ async function bootstrap() {
   store = new AccountStore(app.getPath('userData'));
   globalThis.workbenchAccountState=()=>store.list(running());
   globalThis.workbenchOpenAccount=async id=>{store.get(id);focusWorkbench();await window.webContents.executeJavaScript(`window.StudioShell.openAccounts(${JSON.stringify(id)})`,true);};
+  const nativeVideo=createNativeVideoAdapter({store,createView,openAccount:async id=>{selectedId=id;await createView(id);await globalThis.workbenchOpenAccount(id);fitSelected();},directory:app.getPath('userData')});
+  globalThis.workbenchNativeVideo=nativeVideo;
   await import('../server.js');
   bootLog('local server imported');
   window = new BrowserWindow({ autoHideMenuBar: true, width: 1500, height: 940, minWidth: 1100, minHeight: 720, backgroundColor: '#f3f0e9', title: '帧间 · 视频工作台', webPreferences: { preload: path.join(here, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true } });
@@ -121,18 +124,19 @@ async function bootstrap() {
   ipcMain.handle('accounts:list', () => store.list(running()));
   ipcMain.handle('accounts:add', (_, input) => { const value = store.add(input); return { ...value, status: 'idle' }; });
   ipcMain.handle('accounts:update', async (_, { id, input }) => { const value = store.update(id, input); if (views.has(id)) { await session.fromPartition(accountPartition(id)).setProxy(value.proxy ? { proxyRules: value.proxy } : { mode: 'system' }); } return value; });
-  ipcMain.handle('accounts:remove', async (_, id) => { await stopView(id, true); store.remove(id); return store.list(running()); });
+  ipcMain.handle('accounts:remove', async (_, id) => { if(globalThis.workbenchNativeVideo?.isBusy(id))throw Error('账号正在生成视频，请完成后删除');await stopView(id, true); store.remove(id); return store.list(running()); });
   ipcMain.handle('accounts:start', async (_, id) => { await createView(id); selectedId = id; fitSelected(); return store.list(running()); });
-  ipcMain.handle('accounts:stop', async (_, id) => { await stopView(id); fitSelected(); return store.list(running()); });
+  ipcMain.handle('accounts:stop', async (_, id) => { if(globalThis.workbenchNativeVideo?.isBusy(id))throw Error('账号正在生成视频，可关闭右侧面板，完成后再停用');await stopView(id); fitSelected(); return store.list(running()); });
   ipcMain.handle('accounts:select', async (_, id) => {
-    for (const openId of [...views.keys()]) if (openId !== id) await stopView(openId);
+    for (const openId of [...views.keys()]) if (openId !== id&&!globalThis.workbenchNativeVideo?.isBusy(openId)) await stopView(openId);
     await createView(id); selectedId = id; fitSelected(); return { selectedId: id };
   });
   ipcMain.handle('accounts:sync', async (_, id) => syncAccount(id));
   ipcMain.handle('accounts:conversation',async(_, {id,conversationId})=>{
     if(!/^[a-zA-Z0-9_-]{1,100}$/.test(String(conversationId||'')))throw Error('会话编号无效');
-    for(const openId of [...views.keys()])if(openId!==id)await stopView(openId);
+    for(const openId of [...views.keys()])if(openId!==id&&!globalThis.workbenchNativeVideo?.isBusy(openId))await stopView(openId);
     const view=await createView(id);selectedId=id;fitSelected();
+    if(globalThis.workbenchNativeVideo?.isBusy(id)){if(globalThis.workbenchNativeVideo.activeConversation(id)!==conversationId)throw Error('该账号正在制作视频，请完成后查看其他会话');return {selectedId:id};}
     await view.webContents.loadURL('https://www.doubao.com/chat/'+encodeURIComponent(conversationId));return {selectedId:id};
   });
   ipcMain.handle('accounts:set-limit', (_, value) => ({ activeLimit: store.setLimit(value) }));

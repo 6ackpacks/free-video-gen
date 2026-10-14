@@ -1,6 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import https from 'node:https';
+import {spawn} from 'node:child_process';
+import ffmpegPath from 'ffmpeg-static';
 import { once } from 'node:events';
 import { setTimeout as delay } from 'node:timers/promises';
 
@@ -18,6 +20,7 @@ export class MediaStore {
     this.directory = directory;
     fs.mkdirSync(directory, { recursive: true });
     this.runs = new Map();
+    this.previewRuns = new Map();
     this.saves = new Map();
     this.transfers = new Map();
     this.saveQueue = Promise.resolve();
@@ -58,8 +61,15 @@ export class MediaStore {
       req.on('error', reject);
     });
   }
+  async previewFile(job,file) {
+    const target=path.join(this.directory,job.id+'.preview.mp4');if(fs.existsSync(target))return target;
+    if(this.previewRuns.has(job.id))return this.previewRuns.get(job.id);
+    const run=new Promise((resolve,reject)=>{const probe=spawn(ffmpegPath,['-hide_banner','-i',file],{windowsHide:true,stdio:['ignore','ignore','pipe']});let info='';probe.stderr.on('data',v=>info+=v);probe.on('error',()=>resolve(file));probe.on('exit',()=>{if(!/Video: hevc/i.test(info)){resolve(file);return;}const temp=target+'.part.mp4',encoder=spawn(ffmpegPath,['-y','-i',file,'-c:v','libx264','-preset','veryfast','-crf','20','-c:a','aac','-map_metadata','0','-movflags','+faststart+use_metadata_tags',temp],{windowsHide:true,stdio:'ignore'});encoder.on('error',reject);encoder.on('exit',code=>{if(code!==0){reject(Error('视频预览转码失败'));return;}fs.renameSync(temp,target);resolve(target);});});});
+    this.previewRuns.set(job.id,run);try{return await run;}finally{this.previewRuns.delete(job.id);}
+  }
   async serve(job, req, res, download = false, preview = false) {
     const file = this.filename(job);
+    if(preview&&!download&&job.videoRoute==='doubao'){if(!fs.existsSync(file))await this.save(job);return this.serveLocal(await this.previewFile(job,file),job,req,res,false);}
     if (preview && !download && !fs.existsSync(file)) {
       const range = req.headers.range;
       if (range && !/^bytes=(?:\d+-\d*|-\d+)$/.test(range)) { res.writeHead(416); return res.end(); }
@@ -77,7 +87,7 @@ export class MediaStore {
     // Full downloads use the bounded, resumable local cache.
     if (!fs.existsSync(file)) await this.save(job);
     if (res.destroyed) return;
-    return this.serveLocal(file, job, req, res, download);
+    return this.serveLocal(preview&&!download?await this.previewFile(job,file):file, job, req, res, download);
   }
   async openSource(job, headers = {}) {
     const urls = () => [...new Set([this.preferred.get(job.id), ...(job.outputs||[]).map(item=>typeof item==='string'?item:item.url)].filter(url=>/^https:\/\//i.test(url||'')))];

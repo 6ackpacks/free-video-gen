@@ -1,3 +1,4 @@
+import {savePromotionPreset,applyPromotionPreset} from './promotion-production.js';
 export async function studioApi(service,req,res,url,{body,reply}) {
   const route=url.pathname;if(!route.startsWith('/api/studio'))return false;
   const {domain,queue}=service;
@@ -19,9 +20,21 @@ export async function studioApi(service,req,res,url,{body,reply}) {
   if(route==='/api/studio/templates'&&req.method==='POST')return send(domain.saveTemplate(await body(req)));
   const template=/^\/api\/studio\/templates\/([^/]+)$/.exec(route);
   if(template&&req.method==='PATCH'){const t=domain.template(decodeURIComponent(template[1]));t.archived=!!(await body(req)).archived;domain.save();return send(t);}
-  if(route==='/api/studio/projects'&&req.method==='POST')return send(domain.saveProject(await body(req)));
+  if(route==='/api/studio/promotion-presets'&&req.method==='GET')return send(domain.state.promotionPresets);
+  if(route==='/api/studio/promotion-presets'&&req.method==='POST')return send(savePromotionPreset(service,await body(req)));
+  const applyPreset=/^\/api\/studio\/promotion-presets\/([^/]+)\/apply$/.exec(route);
+  if(applyPreset&&req.method==='POST'){const input=await body(req);if(service.promotionProduction.busy(input.projectId))throw Error('视频准备中，请等待完成后调整资料');return send(applyPromotionPreset(service,applyPreset[1],input.projectId));}
+  const production=/^\/api\/studio\/projects\/([^/]+)\/produce$/.exec(route);
+  if(production&&req.method==='POST')return send(service.promotionProduction.start(production[1],await body(req)));
+  const productionTask=/^\/api\/studio\/productions\/([^/]+)$/.exec(route);
+  if(productionTask&&req.method==='GET')return send(service.promotionProduction.get(productionTask[1]));
+  const directVideo=/^\/api\/studio\/projects\/([^/]+)\/generate-video$/.exec(route);
+  if(directVideo&&req.method==='POST')return send(service.videoProduction.start(directVideo[1],await body(req)));
+  const directTask=/^\/api\/studio\/video-productions\/([^/]+)$/.exec(route);
+  if(directTask&&req.method==='GET')return send(service.videoProduction.get(directTask[1]));
+  if(route==='/api/studio/projects'&&req.method==='POST'){const input=await body(req);if(service.videoProduction?.busy(input.id)||service.promotionProduction?.busy(input.id))throw Error('视频准备中，请等待完成后调整资料');return send(domain.saveProject(input));}
   const flow=/^\/api\/studio\/projects\/([^/]+)\/monitor-workflow(?:\/(confirm|retry|settings))?$/.exec(route);
-  if(flow){if(req.method==='GET')return send(service.monitorWorkflow.get(flow[1]));if(req.method!=='POST')throw Error('不支持的工作线操作');const input=await body(req);if(flow[2]==='settings')return send(service.monitorWorkflow.configure(flow[1],input));if(flow[2]==='confirm')return send(service.monitorWorkflow.confirm(flow[1]));if(flow[2]==='retry')return send(await service.monitorWorkflow.retry(flow[1],input.slotId,input.externalId));return send(service.monitorWorkflow.create(flow[1],input));}
+  if(flow){if(req.method==='GET')return send(service.monitorWorkflow.get(flow[1]));if(req.method!=='POST')throw Error('不支持的工作线操作');const input=await body(req);if(flow[2]==='settings')return send(service.monitorWorkflow.configure(flow[1],input));if(flow[2]==='confirm')return send(service.monitorWorkflow.confirm(flow[1],input));if(flow[2]==='retry')return send(await service.monitorWorkflow.retry(flow[1],input.slotId,input.externalId));return send(service.monitorWorkflow.create(flow[1],input));}
   const project=/^\/api\/studio\/projects\/([^/]+)(?:\/(prompts|submit|adopt|draft))?$/.exec(route);
   if(project){
     const p=domain.project(project[1]);
@@ -29,11 +42,19 @@ export async function studioApi(service,req,res,url,{body,reply}) {
     if(req.method==='POST'){
       const input=await body(req);
       if(project[2]==='draft'){
+        if(service.videoProduction?.busy(p.id))throw Error('视频内容正在后台准备，无需另行生成提示词');
         const existing=service.drafts.tasks.find(t=>t.projectId===p.id&&t.status==='running');if(existing)return send(existing);
         const task=service.drafts.create({projectId:p.id,requestId:input.requestId,mode:['missing','dirty'].includes(input.mode)?input.mode:'all'});task.projectId=p.id;p.promptTaskId=task.id;p.stage='prompts';domain.save();service.drafts.save();return send(task);
       }
       if(project[2]==='submit')return send(service.submit({...input,projectId:p.id}));
       if(project[2]==='prompts'){
+        if(service.videoProduction?.busy(p.id)||service.promotionProduction?.busy(p.id))throw Error('视频准备中，请等待完成后编辑');
+        if(input.slot){
+          const {planId,index,prompt}=input.slot,plan=p.plans.find(v=>v.id===planId);
+          if(!plan||!Number.isInteger(index)||index<0||index>=plan.count||typeof prompt!=='string'||!prompt.trim()||prompt.length>16000)throw Error('视频描述无效');
+          if(plan.promptsDirty&&!input.confirm)throw Error('宣传资料已变更，请先重新生成样片');if(input.confirm)plan.promptsDirty=false;
+          plan.prompts=Array.from({length:plan.count},(_,i)=>i===index?prompt:plan.prompts[i]||'');domain.save();return send(service.project(p.id));
+        }
         for(const plan of p.plans){const change=input.plans?.find(v=>v.id===plan.id);if(change){if(!Array.isArray(change.prompts)||change.prompts.length!==plan.count||change.prompts.some(v=>typeof v!=='string'||!v.trim()||v.length>16000))throw Error('提示词条数或内容无效');plan.prompts=change.prompts;plan.scriptConfirmed=!!change.scriptConfirmed;if(input.confirm)plan.promptsDirty=false;}}
         domain.save();return send(service.project(p.id));
       }
@@ -66,9 +87,9 @@ export async function studioApi(service,req,res,url,{body,reply}) {
     if(job[2]==='reconcile'){
       const input=await body(req),externalId=current.providerId||String(input.externalId||'');
       if(!externalId||externalId.length>150||!/^[-a-zA-Z0-9_:]+$/.test(externalId))throw Error('缺少上游任务编号，请在账号池核对后再处理');
-      const result=await service.provider.status(externalId,current);current.providerId=externalId;Object.assign(current,result);queue.save();return send(current);
+      const result=await service.provider.status(externalId,current);current.providerId=externalId;Object.assign(current,result);if(result.progress)current.providerProgress=result.progress;queue.save();return send(current);
     }
-    if(current.providerId){const result=await service.provider.status(current.providerId,current);if(result.status!=='error'){Object.assign(current,result);queue.save();return send(current);}}
+    if(current.providerId){const result=await service.provider.status(current.providerId,current);if(result.status!=='error'){Object.assign(current,result);if(result.progress)current.providerProgress=result.progress;queue.save();return send(current);}}
     const retryInput=await body(req);
     if(retryInput.useProjectSettings&&current.projectId){
       if(current.status!=='error')throw Error('只能重试已明确失败的任务');

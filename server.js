@@ -199,6 +199,10 @@ const api = async (req, res, url) => {
     catch (error) { return reply(res, 200, { connected: false, error: error.message }); }
   }
   if (route === '/api/doubao' && req.method === 'GET') return reply(res, 200, await provider.doubao.info());
+  if(route==='/api/desktop/video-tasks'&&req.method==='POST'){if(!globalThis.workbenchNativeVideo)throw Error('请在桌面工作台使用豆包生成');return reply(res,200,globalThis.workbenchNativeVideo.start(await body(req)));}
+  const nativeQuery=/^\/api\/desktop\/video-tasks\/([^/]+)\/query$/.exec(route);if(nativeQuery&&req.method==='POST')return reply(res,200,await globalThis.workbenchNativeVideo.query(nativeQuery[1]));
+  const nativeVideo=/^\/api\/desktop\/video-tasks\/([^/]+)$/.exec(route);if(nativeVideo&&req.method==='GET'){if(!globalThis.workbenchNativeVideo)throw Error('桌面执行器不可用');return reply(res,200,globalThis.workbenchNativeVideo.get(nativeVideo[1]));}
+  if(route==='/api/doubao/native-reconcile'&&req.method==='POST'){const input=await body(req);return reply(res,200,await provider.doubao.request('/api/video-tasks/'+encodeURIComponent(input.taskId)+'/reconcile-native',{method:'POST',body:JSON.stringify({nativeTaskId:input.nativeTaskId})}));}
   if(route==='/api/desktop/accounts'&&req.method==='GET')return reply(res,200,desktopAccountState());
   if(route==='/api/desktop/accounts/open'&&req.method==='POST'){const input=await body(req);if(!desktopAccountState().accounts.some(a=>a.id===input.id))throw Error('本地账号不存在');if(!globalThis.workbenchOpenAccount)throw Error('请先启动桌面工作台，再打开登录会话');await globalThis.workbenchOpenAccount(input.id);return reply(res,200,{opened:true});}
   if (route === '/api/doubao/accounts' && req.method === 'GET') return reply(res, 200, await provider.doubao.accounts());
@@ -467,7 +471,7 @@ http.createServer(async (req, res) => {
     if (url.pathname.startsWith('/api/')) return await api(req, res, url);
     if(req.method==='GET'&&url.pathname==='/design-assets/frame-logo.svg')return reply(res,200,fs.readFileSync(path.join(root,'design-assets/frame-logo.svg')),'image/svg+xml');
     if(req.method==='GET'&&/^\/design-assets\/[a-z0-9-]+\.webp$/.test(url.pathname)){const file=path.join(root,url.pathname.slice(1));if(fs.existsSync(file))return reply(res,200,fs.readFileSync(file),'image/webp');}
-    if(req.method==='GET'&&['/studio-ui.js','/monitor-workspace.js','/monitor-studio.js','/monitor-ui-state.js','/monitor-studio.css','/studio-ui.css','/replica-design.js','/replica-design.css','/app-shell.js','/app-shell.css'].includes(url.pathname))return reply(res,200,fs.readFileSync(path.join(root,url.pathname.slice(1))),url.pathname.endsWith('.css')?'text/css; charset=utf-8':'text/javascript; charset=utf-8');
+    if(req.method==='GET'&&['/service-recipes.js','/video-settings.js','/promotion-ui.js','/promotion-model.js','/promotion-ui.css','/studio-ui.js','/monitor-workspace.js','/monitor-studio.js','/monitor-ui-state.js','/monitor-studio.css','/studio-ui.css','/replica-design.js','/replica-design.css','/app-shell.js','/app-shell.css'].includes(url.pathname))return reply(res,200,fs.readFileSync(path.join(root,url.pathname.slice(1))),url.pathname.endsWith('.css')?'text/css; charset=utf-8':'text/javascript; charset=utf-8');
     if(req.method==='GET'&&url.pathname==='/accounts')return reply(res,200,fs.readFileSync(path.join(root,'index.html')),'text/html; charset=utf-8');
     if(req.method==='GET'&&['/studio','/templates','/projects','/works','/assets','/settings'].includes(url.pathname))return reply(res,200,fs.readFileSync(path.join(root,'studio.html')),'text/html; charset=utf-8');
     if(req.method==='GET'&&url.pathname==='/replicate')return reply(res,200,fs.readFileSync(path.join(root,'replica-studio.html')),'text/html; charset=utf-8');

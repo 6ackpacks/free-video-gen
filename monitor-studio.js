@@ -50,6 +50,7 @@ export function renderMonitorStudio(ctx) {
     polling = false,
     promptSaving = false;
   let directDraft = null,
+    productionTask = null,
     flow = null,
     imageTask = null,
     transformTask = null,
@@ -59,7 +60,8 @@ export function renderMonitorStudio(ctx) {
     promptStarting = false,
     processingMode = localStorage.getItem("monitor:processing:" + p.id) || "",
     videoSignature = "",
-    promptSignature = "";
+    promptSignature = "",
+    completedSlots = new Set();
   let rememberedImages = [];
   try { rememberedImages = JSON.parse(localStorage.getItem("monitor:handled:" + p.id) || "[]"); } catch {}
   const handledImages = new Set(Array.isArray(rememberedImages) ? rememberedImages : []);
@@ -127,7 +129,7 @@ export function renderMonitorStudio(ctx) {
   function selection() {
     app.innerHTML =
       stepBar() +
-      `<div class="studio-select-layout"><section><div class="studio-page-title"><h1>选择动作模板</h1><p>每个动作分别生成视频，下一步准备底图与提示词。</p></div><div class="studio-filters"><input id="studioActionSearch" placeholder="搜索动作"><div id="studioCategories">${[
+      `<div class="studio-select-layout"><section><div class="studio-page-title"><h1>选择动作模板</h1><p>每个动作分别生成视频，下一步准备底图并选择模型。</p></div><div class="studio-filters"><input id="studioActionSearch" placeholder="搜索动作"><div id="studioCategories">${[
         ["all", "全部"],
         ["door", "门口互动"],
         ["corridor", "走廊同行"],
@@ -265,7 +267,7 @@ export function renderMonitorStudio(ctx) {
     }
     app.innerHTML =
       stepBar() +
-      `<div class="studio-page-title"><h1>底图与视频</h1><p>上传或选择底图，设置每个动作的底图、数量和时长，并配置生成参数与提示词。</p></div><div class="studio-production-layout"><section class="studio-material-panel card"><header><h2>底图与素材</h2><div><button id="studioUpload">↥ 上传图片</button><button id="studioAssets">▧ 我的素材</button><button id="studioGenerateImage">✧ AI生成底图</button></div></header><div class="studio-image-tools"><button id="studioUseOriginal" class="active">✓ 直接使用原图</button><button id="studioTransform">◉ 监控视角加工</button><button id="studioVariants">✧ 按动作生成变体</button></div><div id="studioImagePreview" class="studio-image-preview"></div><p class="studio-image-hint" id="studioImageHint">当前图片可直接作为视频首帧，无需重新生成。</p><div id="studioImageProgress" role="status"></div><h3 id="studioImagesCount">已上传的底图</h3><div id="studioImageThumbs" class="studio-image-thumbs"></div><div class="studio-people"><h3>人物参考（可选）</h3><div id="studioPersonThumbs"></div><button id="studioPeople">＋ 添加人物图</button><small>用于AI生成底图或动作变体。</small></div></section><div class="studio-production-right"><section class="studio-assignment card"><header><h2>动作与底图分配</h2><small>一张底图可用于多个视频，数量由你设置。</small></header><div id="studioPlanRows"></div></section><section class="studio-settings card"><h2>视频设置</h2><div id="studioVideoSettings"></div></section><section class="studio-prompts card"><header><h2>提示词 <small id="studioPromptCount"></small></h2><button id="studioGeneratePrompts">↻ 生成 / 更新提示词</button></header><div id="studioPromptState" role="status"></div><div id="studioPromptList"></div></section></div></div><section id="results" class="studio-results card"><header><h2>任务与成片 <small id="studioResultCount"></small></h2><button id="studioOpenAccounts">豆包账号池</button></header><div id="studioResults"></div></section><footer class="studio-footer"><span id="studioProductionTotal"></span><div><select id="studioTrialSlot" aria-label="试片动作"></select><button id="studioTrial">生成1条试片</button><button id="studioSubmit" class="primary">批量生成</button></div></footer><div id="studioNotice" role="status"></div>`;
+      `<div class="studio-page-title"><h1>底图与视频</h1><p>上传或选择底图，设置动作、数量、时长和模型，确认后直接制作视频。</p></div><div class="studio-production-layout"><section class="studio-material-panel card"><header><h2>底图与素材</h2><div><button id="studioUpload">↥ 上传图片</button><button id="studioAssets">▧ 我的素材</button><button id="studioGenerateImage">✧ AI生成底图</button></div></header><div class="studio-image-tools"><button id="studioUseOriginal" class="active">✓ 直接使用原图</button><button id="studioTransform">◉ 监控视角加工</button><button id="studioVariants">✧ 按动作生成变体</button></div><div id="studioImagePreview" class="studio-image-preview"></div><p class="studio-image-hint" id="studioImageHint">当前图片可直接作为视频首帧，无需重新生成。</p><div id="studioImageProgress" role="status"></div><h3 id="studioImagesCount">已上传的底图</h3><div id="studioImageThumbs" class="studio-image-thumbs"></div><div class="studio-people"><h3>人物参考（可选）</h3><div id="studioPersonThumbs"></div><button id="studioPeople">＋ 添加人物图</button><small>用于AI生成底图或动作变体。</small></div></section><div class="studio-production-right"><section class="studio-assignment card"><header><h2>动作与底图分配</h2><small>一张底图可用于多个视频，数量由你设置。</small></header><div id="studioPlanRows"></div></section><section class="studio-settings card"><h2>视频设置</h2><div id="studioVideoSettings"></div></section><section class="studio-prompts card" id="studioCompletedPrompts" hidden><header><h2>提示词 <small id="studioPromptCount"></small></h2><button id="studioGeneratePrompts" hidden>更新提示词</button></header><div id="studioPromptState" role="status"></div><div id="studioPromptList"></div></section></div></div><section id="results" class="studio-results card"><header><h2>任务与成片 <small id="studioResultCount"></small></h2><button id="studioOpenAccounts">豆包账号池</button></header><div id="studioResults"></div></section><footer class="studio-footer"><span id="studioProductionTotal"></span><div><select id="studioTrialSlot" aria-label="试片动作"></select><button id="studioTrial">生成1条试片</button><button id="studioSubmit" class="primary">批量生成</button></div></footer><div id="studioNotice" role="status"></div>`;
     settings(app.querySelector("#studioVideoSettings"));
     const fifth = app.querySelector("#projectReferenceMode")?.closest("label");
     if (fifth) {
@@ -465,7 +467,7 @@ export function renderMonitorStudio(ctx) {
   function drawPrompts() {
     if (!app.querySelector("#studioPromptList")) return;
     const signature = JSON.stringify(
-      p.plans.map((v) => [v.id, v.prompts, v.promptsDirty, v.count]),
+      [p.plans.map((v) => [v.id, v.prompts, v.promptsDirty, v.count]),[...completedSlots]],
     );
     if (
       promptSaving ||
@@ -480,11 +482,13 @@ export function renderMonitorStudio(ctx) {
       ),
     );
     app.querySelector("#studioPromptList").innerHTML = p.plans
+      .filter(plan=>[...completedSlots].some(v=>v.startsWith(plan.id+":")))
       .map(
         (plan, i) =>
-          `<details data-prompt-group="${plan.id}" ${open.has(plan.id) || (!open.size && i === 0) ? "open" : ""}><summary><b>${i + 1}</b>${esc(plan.snapshot.name)}<small>${plan.prompts.length}/${plan.count}</small></summary>${plan.promptsDirty ? '<p class="studio-warning">设置已改变，可以更新提示词或编辑后直接生成。</p>' : ""}${plan.prompts.length ? plan.prompts.map((text, index) => `<label>${plan.count > 1 ? "视频" + (index + 1) : ""}<textarea data-prompt="${plan.id}:${index}" aria-label="${esc(plan.snapshot.name)}提示词${index + 1}">${esc(text)}</textarea></label>`).join("") : '<p class="studio-muted">点击“生成 / 更新提示词”，本页查看和编辑结果。</p>'}</details>`,
+          `<details data-prompt-group="${plan.id}" ${open.has(plan.id) || (!open.size && i === 0) ? "open" : ""}><summary><b>${i + 1}</b>${esc(plan.snapshot.name)}<small>${plan.prompts.length}/${plan.count}</small></summary>${plan.promptsDirty ? '<p class="studio-warning">设置已改变，可以更新提示词或编辑后直接生成。</p>' : ""}${plan.prompts.length ? plan.prompts.map((text, index) => completedSlots.has(plan.id+":"+index) ? `<label>${plan.count > 1 ? "视频" + (index + 1) : ""}<textarea data-prompt="${plan.id}:${index}" aria-label="${esc(plan.snapshot.name)}提示词${index + 1}">${esc(text)}</textarea><button data-remake-prompt="${plan.id}:${index}">用此提示词重新生成</button></label>` : "").join("") : '<p class="studio-muted">点击“生成 / 更新提示词”，本页查看和编辑结果。</p>'}</details>`,
       )
       .join("");
+    app.querySelectorAll("[data-remake-prompt]").forEach(b=>b.onclick=()=>remakePrompt(b.dataset.remakePrompt));
     app.querySelectorAll("[data-prompt]").forEach(
       (e) =>
         (e.oninput = () => {
@@ -494,7 +498,7 @@ export function renderMonitorStudio(ctx) {
           clearTimeout(e.timer);
           e.timer = setTimeout(async () => {
             try {
-              await persistPrompts();
+              await savePromptSlot(id,Number(index),e.value);
               promptSaving = false;
               updateButtons();
             } catch (err) {
@@ -503,6 +507,16 @@ export function renderMonitorStudio(ctx) {
           }, 500);
         }),
     );
+  }
+  async function savePromptSlot(planId,index,prompt) {
+    if(!prompt.trim())throw Error("请输入这条视频的新描述");
+    await post(`/studio/projects/${p.id}/prompts`,{slot:{planId,index,prompt},confirm:true});
+  }
+  async function flushEditedPrompts(){
+    for(const el of app.querySelectorAll("[data-prompt]")){const [id,index]=el.dataset.prompt.split(":");clearTimeout(el.timer);await savePromptSlot(id,Number(index),el.value);}
+  }
+  async function remakePrompt(value) {
+    try { await flushEditedPrompts(); app.querySelector("#studioTrialSlot").value=value; await submit(true); } catch(e) { message("未重新生成："+e.message); }
   }
   function updateButtons() {
     if (!app.querySelector("#studioSubmit")) return;
@@ -514,10 +528,8 @@ export function renderMonitorStudio(ctx) {
       `已准备 ${prepared}/${total()}`;
     app.querySelector("#studioProductionTotal").innerHTML =
       `<b>${p.plans.length}</b> 个动作 · 共 <b>${total()}</b> 条视频 · ${p.plans.every((v) => imageReady(v, data.assets)) ? "底图已就绪" : "请选择底图"}`;
-    const drafting =
-      promptStarting ||
-      directDraft?.status === "running" ||
-      flow?.status === "drafting";
+    const drafting = productionTask?.status === "preparing";
+    app.querySelectorAll("#studioVideoSettings select").forEach(el=>el.disabled=drafting);
     window.monitorPipelineDrafting = drafting || flow?.status === "images";
     app.querySelectorAll("[data-prompt]").forEach(el => { el.disabled = drafting; });
     app
@@ -548,16 +560,14 @@ export function renderMonitorStudio(ctx) {
       !p.plans.length ||
       p.plans.some(
         (v) =>
-          !imageReady(v, data.assets) ||
-          v.prompts.length !== v.count ||
-          v.prompts.some((s) => !s?.trim()),
+          !imageReady(v, data.assets),
       );
     const trial = app.querySelector("#studioTrialSlot").value.split(":"),
       trialPlan = p.plans.find((v) => v.id === trial[0]);
     app.querySelector("#studioTrial").disabled =
       submitBusy ||
       drafting ||
-      !trialPlan?.prompts[Number(trial[1])] ||
+      !trialPlan ||
       !imageReady(trialPlan, data.assets);
   }
   async function upload(role) {
@@ -786,10 +796,10 @@ export function renderMonitorStudio(ctx) {
     if (submitBusy) return;
     try {
       submitBusy = true;
+      if(promptSaving){app.querySelectorAll("[data-prompt]").forEach(e=>clearTimeout(e.timer));await flushEditedPrompts();promptSaving=false;}
       updateButtons();
       await applySettings();
       await saveProject();
-      await persistPrompts(true);
       const [planId, index] = app
           .querySelector("#studioTrialSlot")
           .value.split(":"),
@@ -798,19 +808,20 @@ export function renderMonitorStudio(ctx) {
           p.id +
           ":" +
           (trial ? planId + ":" + index : "all");
-      const fingerprint = JSON.stringify({plans:p.plans.map(v=>({id:v.id,prompts:v.prompts,imageIds:v.imageIds,mapping:v.mapping,count:v.count,duration:v.duration})),settings:ctx.choice});
+      const fingerprint = JSON.stringify({plans:p.plans.map(v=>({id:v.id,prompts:v.prompts.map((text,index)=>completedSlots.has(v.id+":"+index)?text:""),imageIds:v.imageIds,mapping:v.mapping,count:v.count,duration:v.duration})),settings:ctx.choice});
       let previous = null;
       try { previous = JSON.parse(localStorage.getItem(key) || "null"); } catch {}
       const requestId = previous?.fingerprint === fingerprint ? previous.requestId : crypto.randomUUID();
       localStorage.setItem(key,JSON.stringify({requestId,fingerprint}));
-      await post(`/studio/projects/${p.id}/submit`, {
+      productionTask = await post(`/studio/projects/${p.id}/generate-video`, {
         requestId,
         trial,
         planId: trial ? planId : undefined,
         index: trial ? Number(index) : undefined,
         generationSettings: ctx.choice,
       });
-      message("本地任务已创建，发送进度和成片会在下方更新。");
+      localStorage.setItem("monitor:production:"+p.id,productionTask.id);
+      message("正在制作视频，内容会在后台自动准备，无需再次确认。");
       await refresh();
       app
         .querySelector("#results")
@@ -860,7 +871,7 @@ export function renderMonitorStudio(ctx) {
       mine
         .map(
           (j) =>
-            `<article data-studio-job="${j.id}"><div class="studio-result-preview">${j.status === "complete" && j.outputs?.length ? `<video controls playsinline preload="none" src="/api/video/${j.id}?preview=1"></video>` : "<span>▻</span>"}</div><div class="studio-result-info"><strong>${esc(j.templateName || "视频")}${j.isTrial ? " · 试片" : ""}</strong><span class="studio-job-state ${j.status === "error" ? "error" : ""}">${label(j)}</span><p>${esc(j.error || j.providerProgress?.message || (j.status === "queued" ? "本地任务已创建，尚未发送到生成服务。" : ""))}</p><details><summary>查看发送记录与提示词</summary><p>本地任务：${esc(j.id)}<br>服务任务：${esc(j.providerId || "尚无")}<br>会话确认：${esc(j.providerProgress?.conversationId || "尚未返回")}</p><pre>${esc(j.prompt || "")}</pre></details></div><div class="studio-result-actions">${j.status === "error" ? `<button data-retry-studio-job="${j.id}">重试这条视频</button>` : ""}${j.status === "complete" && j.outputs?.length ? `<a class="button" href="/api/video/${j.id}?download=1">下载</a>${j.isTrial ? `<button data-adopt-studio-trial="${j.id}">采纳试片</button>` : ""}` : ""}${j.status === "needs_review" ? `<button data-query-studio-job="${j.id}">查询已有任务</button>` : ""}</div></article>`,
+            `<article data-studio-job="${j.id}"><div class="studio-result-preview">${j.status === "complete" && j.outputs?.length ? `<video controls playsinline preload="none" src="/api/video/${j.id}?preview=1"></video>` : "<span>▻</span>"}</div><div class="studio-result-info"><strong>${esc(j.templateName || "视频")}${j.isTrial ? " · 试片" : ""}</strong><span class="studio-job-state ${j.status === "error" ? "error" : ""}">${label(j)}</span><p>${esc(j.status === "complete" ? "已取得真实成片，可播放或下载。" : j.error || j.providerProgress?.message || (j.status === "queued" ? "本地任务已创建，尚未发送到生成服务。" : ""))}</p><details><summary>${j.status === "complete" ? "查看发送记录与提示词" : "查看发送记录"}</summary><p>本地任务：${esc(j.id)}<br>服务任务：${esc(j.providerId || "尚无")}<br>会话确认：${esc(j.providerProgress?.conversationId || "尚未返回")}</p>${j.status === "complete" ? `<pre>${esc(j.prompt || "")}</pre>` : ""}</details></div><div class="studio-result-actions">${j.status === "error" ? `<button data-retry-studio-job="${j.id}">重试这条视频</button>` : ""}${j.status === "complete" && j.outputs?.length ? `<a class="button" href="/api/video/${j.id}?download=1">下载</a>${j.isTrial ? `<button data-adopt-studio-trial="${j.id}">采纳试片</button>` : ""}` : ""}${j.status === "needs_review" ? `<button data-query-studio-job="${j.id}">查询已有任务</button>` : ""}</div></article>`,
         )
         .join("") ||
       '<div class="studio-empty">尚未提交视频。上传图片或生成提示词不会自动提交视频。</div>';
@@ -937,6 +948,8 @@ export function renderMonitorStudio(ctx) {
       ]);
       data = catalog;
       ctx.updateCatalog(data);
+      const productionId = productionTask?.id || localStorage.getItem("monitor:production:"+p.id);
+      if (productionId) { productionTask = await api("/studio/video-productions/"+productionId); message(productionTask.status==="error"?"制作失败："+productionTask.error:productionTask.status==="preparing"?"正在准备视频内容，随后自动生成，请稍候…":""); }
       if (step !== "production" || !app.querySelector("#studioResults")) return;
       const remote = data.projects.find((v) => v.id === p.id);
       if (remote && !promptSaving && !app.querySelector("[data-prompt]:focus"))
@@ -1037,14 +1050,14 @@ export function renderMonitorStudio(ctx) {
       ) {
         const done = flow.slots.filter((s) => s.status === "complete").length;
         app.querySelector("#studioImageProgress").innerHTML =
-          `<p>${flow.status === "images_ready" ? "动作变体已完成，请确认" : "动作变体 · 已完成" + done + "/" + flow.slots.length}</p><div class="studio-variant-thumbs">${flow.slots.map((s) => `<div>${s.referenceId ? `<img src="${esc(asset(s.referenceId)?.previewUrl || "")}" alt="动作变体">` : "<span>生成中</span>"}<small>${esc(p.plans.find((v) => v.id === s.planId)?.snapshot.name || "动作")} · ${s.index + 1}</small>${s.error ? `<p class="studio-warning">${esc(s.error)}</p>` : ""}${s.status === "error" ? `<button data-retry-variant="${s.id}">重试这一张</button>` : ""}</div>`).join("")}</div>${flow.status === "images_ready" ? '<button id="studioAdoptVariants">采用动作变体并生成提示词</button>' : ""}`;
+          `<p>${flow.status === "images_ready" ? "动作变体已完成，请确认" : "动作变体 · 已完成" + done + "/" + flow.slots.length}</p><div class="studio-variant-thumbs">${flow.slots.map((s) => `<div>${s.referenceId ? `<img src="${esc(asset(s.referenceId)?.previewUrl || "")}" alt="动作变体">` : "<span>生成中</span>"}<small>${esc(p.plans.find((v) => v.id === s.planId)?.snapshot.name || "动作")} · ${s.index + 1}</small>${s.error ? `<p class="studio-warning">${esc(s.error)}</p>` : ""}${s.status === "error" ? `<button data-retry-variant="${s.id}">重试这一张</button>` : ""}</div>`).join("")}</div>${flow.status === "images_ready" ? '<button id="studioAdoptVariants">采用动作变体</button>' : ""}`;
         app
           .querySelector("#studioAdoptVariants")
           ?.addEventListener("click", async () => {
             try {
               flow = await post(
                 `/studio/projects/${p.id}/monitor-workflow/confirm`,
-                {},
+                {autoDraft:false},
               );
               const adopted = await api(`/studio/projects/${p.id}`);
               for (const plan of p.plans) {
@@ -1072,6 +1085,9 @@ export function renderMonitorStudio(ctx) {
             }),
         );
       }
+      const finished = jobs.filter(j=>j.projectId===p.id&&j.status==="complete"&&j.outputs?.length);
+      completedSlots = new Set(finished.map(j=>j.planId+":"+j.slotIndex));
+      app.querySelector("#studioCompletedPrompts").hidden = !finished.length;
       drawPrompts();
       drawResults(jobs);
       updateButtons();

@@ -55,6 +55,7 @@ export function parseActionDraft(content, job) {
 
 export function rewriteMessages(input) {
   const modeRules = {
+    promotion: '用户已确认的宣传事实与素材角色是唯一事实依据；按所选环境或服务表现模板组织短片，不套用固定监控机位、人物随机换装、家庭按摩或暧昧互动。保持参考主体身份，允许模板指定的自然运镜，口播符合时长。',
     store: '保持底图真实空间、固定机位、模板人物数量、核心动作与结束状态。',
     paired: '保持明确成年人物、家庭按摩主题、原资料品牌文字、原图第一人称构图约束和图片视频对应关系。',
     story: '保持主体名称、甲方事实与模板结构，中文对白仍用中文，不编造功效、价格或资质；所有动作和对白符合原时长。',

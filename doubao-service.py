@@ -114,6 +114,7 @@ def install_rate_limit_cooldown(repository) -> None:
     repository.mark_account_limited = mark_limited
     original_update = repository.update_video_task
     def update_task(task_id, **values):
+        if values.get('status')=='failed' and '需核对' in str(values.get('error_message','')):values['status']='needs_review'
         if values.get('error_message') == '账号今日额度已用完，正在切换账号':
             values['error_message'] = '服务暂时限流，5分钟后重新检查可用账号'
         return original_update(task_id, **values)
@@ -446,9 +447,12 @@ def main() -> None:
     upload_script = Path(__file__).with_name("doubao-image-upload.js")
     if upload_script.exists():
         video_browser.UPLOAD_IMAGE_SCRIPT = upload_script.read_text(encoding="utf-8")
+    import importlib.util
+    runner_spec=importlib.util.spec_from_file_location("workbench_chat_runner",Path(__file__).with_name("doubao-native-runner.py"))
+    runner_module=importlib.util.module_from_spec(runner_spec);runner_spec.loader.exec_module(runner_module)
     video_service = VideoTaskService(
         repository,
-        ConfirmingVideoRunner(video_browser),
+        runner_module.NativeVideoRunner(),
         settings_service,
         assets_dir=settings.data_dir,
     )
@@ -462,6 +466,18 @@ def main() -> None:
         settings_service,
     )
     install_session_import_route(app, token, repository, settings)
+    @app.post('/api/video-tasks/{task_id}/reconcile-native')
+    async def reconcile_native(task_id:str,payload:dict,x_doupool_token:str|None=Header(default=None)):
+        if not x_doupool_token or not secrets.compare_digest(x_doupool_token,token):raise HTTPException(status_code=401,detail='invalid local token')
+        import urllib.request
+        native_id=str(payload.get('nativeTaskId',''))
+        if not all(c in '0123456789abcdef-' for c in native_id) or len(native_id)!=36:raise HTTPException(status_code=400,detail='invalid task id')
+        native=json.load(urllib.request.urlopen('http://127.0.0.1:4192/api/desktop/video-tasks/'+native_id,timeout=15))
+        task=repository.get_video_task(task_id)
+        if native.get('accountId')!=task.account_id or native.get('conversationId')!=task.conversation_id or native.get('status')!='complete':raise HTTPException(status_code=409,detail='本次会话尚未取得对应成片')
+        repository.update_video_task(task_id,status='succeeded',result_url=native['resultUrl'],fallback_result_url=native['resultUrl'],remote_task_id=native_id,error_message=None)
+        return {'id':task_id,'status':'succeeded'}
+
     try:
         uvicorn.run(app, host="127.0.0.1", port=args.port, log_level="warning")
     finally:

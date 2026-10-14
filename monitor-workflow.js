@@ -140,7 +140,7 @@ export class MonitorWorkflow {
     this.service.domain.save();
     return p;
   }
-  confirm(projectId) {
+  confirm(projectId,input={}) {
     const task = this.get(projectId);
     if (!task || !task.slots.every((s) => s.status === "complete"))
       throw Error("请先完成所有动作首帧");
@@ -149,6 +149,7 @@ export class MonitorWorkflow {
     for (const s of task.slots)
       this.service.domain.state.assets[s.referenceId].confirmed = true;
     this.service.domain.save();
+    if(input.autoDraft===false){task.status="ready";task.autoVideo=false;this.save();return task;}
     task.status = "drafting";
     task.draftId = this.service.drafts.create({
       projectId,

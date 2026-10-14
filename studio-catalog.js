@@ -1,3 +1,4 @@
+import {SERVICE_RECIPES} from './service-recipes.js';
 import {workflowRecipesForGroup} from './studio-workflow-recipes.js';
 
 export const INDUSTRIES = [
@@ -21,12 +22,8 @@ export function catalogSeeds(industries=INDUSTRIES) {
         ['空间全景','以固定镜头展示真实空间全景、布局、装修与光线，人物自然走过，不改变建筑结构。'],
         ['细节展示','以近景展示真实环境中的陈设、设施或产品细节，保持物品外观一致。'],
         ['动线展示','固定机位拍摄人物沿真实空间的通道移动，展示服务动线，不新增门或通道。']
-      ]:[
-        ['服务介绍','成年工作人员自然介绍服务或产品，配合指示动作，保留真实外观与环境。'],
-        ['过程展示','展示一个清晰、自然的服务或产品使用动作，不夸大功效，不编造宣传事实。'],
-        ['亮点展示','展示用户明确提供的一项产品或服务亮点，镜头聚焦相关主体与细节。']
-      ];
-      actions.forEach(([name,description],i)=>result.push({id:`catalog:${industry.id}:${category}:${i+1}`,scene:industry.id,catalogType:`${industry.id}:${industry.id==='massage'&&category==='service'?'product-service':category}`,industryId:industry.id,name,description:`${industry.name}：${description}`,actions:[description],people:'自然得体的成年人',duration:5,mapping:'common',imageRules:'使用用户确认的环境、产品或人物素材；保留主体外观和空间结构。'}));
+      ]:SERVICE_RECIPES.map(v=>[v.name,v.rule]);
+      actions.forEach(([name,description],i)=>result.push({id:`catalog:${industry.id}:${category}:${i+1}`,scene:industry.id,catalogType:`${industry.id}:${industry.id==='massage'&&category==='service'?'product-service':category}`,industryId:industry.id,...(category==='service'?{serviceRecipeId:SERVICE_RECIPES[i].id}:{}),name,description:`${industry.name}：${description}`,actions:[description],people:'自然得体的成年人',duration:5,mapping:'common',imageRules:'使用用户确认的环境、产品或人物素材；保留主体外观和空间结构。'}));
     }
     result.push({id:`catalog:${industry.id}:avatar-talk:1`,scene:industry.id,catalogType:`${industry.id}:avatar-talk`,industryId:industry.id,name:'商品口播',description:'成年人物固定场景面对镜头，持有真实商品，按用户确认的台词自然介绍产品，脸部与商品清晰可见。',actions:['固定场景面对镜头自然说话并展示商品'],people:'自然得体的成年讲解者',duration:10,mapping:'common',imageRules:'产品外观、人物身份与场景保持一致；初始画面须同时包含人物和商品。'});
   }

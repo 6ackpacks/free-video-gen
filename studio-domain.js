@@ -36,6 +36,7 @@ export class StudioDomain {
     this.state = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file,'utf8')) : {schemaVersion:1,templates:[],projects:[],assets:{},requests:{},settings:{autoAllocate:true, paused:false}};
     for (const seed of seeds) if (!this.state.templates.some(t=>t.id===seed.id)) this.state.templates.push({...copy(seed),source:seed.source || 'builtin',version:1,versions:[{...copy(seed),version:1,createdAt:stamp()}],createdAt:stamp()});
     this.state.industries ||= [];
+    this.state.promotionPresets ||= [];
     this.save();
   }
   save() { fs.mkdirSync(path.dirname(this.file),{recursive:true}); fs.writeFileSync(this.file+'.tmp',JSON.stringify(this.state,null,2)); fs.renameSync(this.file+'.tmp',this.file); }
@@ -86,9 +87,9 @@ export class StudioDomain {
         if(plan.snapshot?.actionPack!==undefined)template.actionPack=actionPackSnapshot(plan.snapshot.actionPack);
         if(plan.snapshot?.replica&&template.replica)template.replica=normalizeReplica(plan.snapshot.replica);
         const count=Number(plan.count),mapping=plan.mapping||template.mapping||'common';
-        const clean={id:plan.id||randomUUID(),templateId:template.id,snapshot:template,count,duration:Number(plan.duration)||template.duration,videoRoute:plan.videoRoute||'doubao',resolution:plan.resolution||'',ratio:plan.ratio||previous?.ratio||'9:16',referenceMode:plan.referenceMode||previous?.referenceMode||'first-frame',autoRatio:plan.autoRatio??previous?.autoRatio??true,mapping,imageIds:plan.imageIds||[],rows:plan.rows||[],shotImages:plan.shotImages||[],creativeBrief:String(plan.creativeBrief||'').slice(0,3000),imageConfig:Object.fromEntries(['scene','people','pose','brief','sourceSceneId'].map(k=>[k,String(plan.imageConfig?.[k]??previous?.imageConfig?.[k]??'').slice(0,2000)])),content:String(plan.content||'').slice(0,16000),prompts:previous?.prompts||[],scriptConfirmed:!!plan.scriptConfirmed};
+        const clean={id:plan.id||randomUUID(),templateId:template.id,snapshot:template,count,duration:Number(plan.duration)||template.duration,videoRoute:plan.videoRoute||'doubao',resolution:plan.resolution||'',ratio:plan.ratio||previous?.ratio||'9:16',referenceMode:plan.referenceMode||previous?.referenceMode||'first-frame',autoRatio:plan.autoRatio??previous?.autoRatio??true,mapping,imageIds:plan.imageIds||[],rows:plan.rows||[],shotImages:plan.shotImages||[],displayFormat:String(plan.displayFormat??previous?.displayFormat??'').slice(0,40),creativeBrief:String(plan.creativeBrief||'').slice(0,3000),imageConfig:Object.fromEntries(['scene','people','pose','brief','sourceSceneId'].map(k=>[k,String(plan.imageConfig?.[k]??previous?.imageConfig?.[k]??'').slice(0,2000)])),content:String(plan.content||'').slice(0,16000),prompts:previous?.prompts||[],scriptConfirmed:!!plan.scriptConfirmed};
         slotsFor(clean);
-        const signature=fingerprint({...clean,prompts:undefined,scriptConfirmed:undefined,...(creative.videoDirection||Object.values(creative.materials).some(v=>v.length)||Object.values(creative.productBrief).some(Boolean)||Object.values(creative.massageSpec).some(Boolean)?{creative}: {})});
+        const signature=fingerprint({...clean,prompts:undefined,scriptConfirmed:undefined,...(creative.promotion.enabled||creative.videoDirection||Object.values(creative.materials).some(v=>v.length)||Object.values(creative.productBrief).some(Boolean)||Object.values(creative.massageSpec).some(Boolean)?{creative}: {})});
         clean.prompts=clean.prompts.slice(0,count);
         // Prompt validity belongs to the server; stale editor flags cannot invalidate a completed draft.
         clean.promptsDirty=!!previous?.promptsDirty;
@@ -97,7 +98,7 @@ export class StudioDomain {
       });
       p.plans=plans;
     }
-    Object.assign(p,{...creative,templateTypeId:typeId||'',peopleBrief:String(input.peopleBrief??p.peopleBrief??'').slice(0,2000),contentBrief:String(input.contentBrief??p.contentBrief??'').slice(0,3000),industryId:selectedType?.industryId||input.industryId||p.industryId||'',name:String(input.name||p.name||'未命名项目').slice(0,100),scene:input.scene||p.scene||'',imagePlanId:input.imagePlanId??p.imagePlanId??'',commonImageId:input.commonImageId??p.commonImageId??'',defaultMapping:['common','one-to-one','custom','shots'].includes(input.defaultMapping)?input.defaultMapping:p.defaultMapping,stage:['templates','prompts','images'].includes(input.stage)?input.stage:p.stage||'templates',brandName:String(input.brandName??p.brandName??'').slice(0,80),brandFacts:String(input.brandFacts??p.brandFacts??'').slice(0,30000),updatedAt:stamp()});
+    Object.assign(p,{...creative,promotionPresetId:input.promotionPresetId??p.promotionPresetId??'',promotionPresetVersion:input.promotionPresetVersion??p.promotionPresetVersion??0,templateTypeId:typeId||'',peopleBrief:String(input.peopleBrief??p.peopleBrief??'').slice(0,2000),contentBrief:String(input.contentBrief??p.contentBrief??'').slice(0,3000),industryId:selectedType?.industryId||input.industryId||p.industryId||'',name:String(input.name||p.name||'未命名项目').slice(0,100),scene:input.scene||p.scene||'',imagePlanId:input.imagePlanId??p.imagePlanId??'',commonImageId:input.commonImageId??p.commonImageId??'',defaultMapping:['common','one-to-one','custom','shots'].includes(input.defaultMapping)?input.defaultMapping:p.defaultMapping,stage:['templates','prompts','images'].includes(input.stage)?input.stage:p.stage||'templates',brandName:String(input.brandName??p.brandName??'').slice(0,80),brandFacts:String(input.brandFacts??p.brandFacts??'').slice(0,30000),updatedAt:stamp()});
     if(!this.state.projects.includes(p))this.state.projects.unshift(p);
     this.save();return p;
   }
@@ -119,7 +120,7 @@ export class StudioDomain {
         if(valid)ready++;
       }
       if(p.scene==='massage' && plan.mapping==='one-to-one' && new Set(plan.imageIds.slice(0,plan.count)).size!==plan.count)errors.push(`${plan.snapshot.name}：逐张按摩制作需每条视频独立的已确认人物底图`);
-      if(plan.prompts.length!==plan.count)errors.push(`${plan.snapshot.name}：请生成提示词`);
+      if(plan.prompts.length!==plan.count||plan.prompts.some(v=>typeof v!=='string'||!v.trim()))errors.push(`${plan.snapshot.name}：请生成提示词`);
       if(plan.promptsDirty)errors.push(`${plan.snapshot.name}：设置已变更，请重新生成或确认保留的提示词`);
       if(plan.videoRoute==='doubao'&&plan.prompts.some(text=>text.length>1900))errors.push(`${plan.snapshot.name}：豆包提示词过长，请精简到1900字以内，避免被截断`);
       if(route&&!route.resolutions.includes(plan.resolution))errors.push(`${plan.snapshot.name}：请选择可用画质`);
@@ -130,6 +131,6 @@ export class StudioDomain {
     if(p.scene==='story'&&(!p.brandName||!p.brandFacts))errors.push('请填写宣传主体与已确认的品牌事实');
     return {count,ready,errors:[...new Set(errors)]};
   }
-  currentFingerprint(p,plan,index){return fingerprint({signature:plan.signature,prompt:plan.prompts[index],images:slotsFor(plan)[index],brand:p.brandName,facts:p.brandFacts,...(p.videoDirection||Object.values(p.materials||{}).some(v=>v.length)||Object.values(p.productBrief||{}).some(Boolean)||Object.values(p.massageSpec||{}).some(Boolean)?{creative:creativeInputs(p)}:{})});}
+  currentFingerprint(p,plan,index){return fingerprint({signature:plan.signature,prompt:plan.prompts[index],images:slotsFor(plan)[index],brand:p.brandName,facts:p.brandFacts,...(p.promotion?.enabled||p.videoDirection||Object.values(p.materials||{}).some(v=>v.length)||Object.values(p.productBrief||{}).some(Boolean)||Object.values(p.massageSpec||{}).some(Boolean)?{creative:creativeInputs(p)}:{})});}
   adopted(p,queue){return p.trials.filter(t=>{const plan=p.plans.find(v=>v.id===t.planId);return plan && t.adopted && queue.state.jobs.find(j=>j.id===t.jobId)?.status==='complete' && this.currentFingerprint(p,plan,t.index)===t.fingerprint;});}
 }

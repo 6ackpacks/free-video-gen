@@ -49,10 +49,14 @@ with sync_playwright() as pw:
     project['plans'][0]['imageIds']=['frame-0','frame-1']
    r.fulfill(content_type='application/json',body=json.dumps(flow));return
   if path.endswith('/prompts'):
+   if req.post_data_json.get('slot'):
+    slot=req.post_data_json['slot'];next(v for v in project['plans'] if v['id']==slot['planId'])['prompts'][slot['index']]=slot['prompt'];r.fulfill(json=project);return
    for change in req.post_data_json['plans']:next(v for v in project['plans'] if v['id']==change['id'])['prompts']=change['prompts']
    r.fulfill(json=project);return
-  if path.endswith('/submit'):
-   submits.append(req.post_data_json);jobs=[{'id':'video-a','projectId':'mock-line','status':'queued','prompt':project['plans'][0]['prompts'][0],'videoRoute':'doubao','templateName':'视频1','providerProgress':{'message':'尚未分配账号'}},{'id':'video-b','projectId':'mock-line','status':'error','prompt':'prompt','error':'网页输入框未找到，尚未发送','videoRoute':'doubao','templateName':'视频2'}];r.fulfill(json={'id':'batch'});return
+  if path=='/api/studio/video-productions/mock-production':r.fulfill(json={'id':'mock-production','status':'submitted'});return
+  if path.endswith('/generate-video'):
+   project['plans'][0]['prompts']=['自动准备的第一条视频描述','自动准备的第二条视频描述'];project['plans'][0]['promptsDirty']=False
+   submits.append(req.post_data_json);jobs=[{'id':'video-a','projectId':'mock-line','planId':project['plans'][0]['id'],'slotIndex':0,'status':'queued','prompt':project['plans'][0]['prompts'][0],'videoRoute':'doubao','templateName':'视频1','providerProgress':{'message':'尚未分配账号'}},{'id':'video-b','projectId':'mock-line','planId':project['plans'][0]['id'],'slotIndex':1,'status':'error','prompt':'prompt','error':'网页输入框未找到，尚未发送','videoRoute':'doubao','templateName':'视频2'}];r.fulfill(json={'id':'mock-production','status':'submitted'});return
   if path=='/api/studio/jobs/video-b/retry':jobs[1]['status']='queued';jobs[1]['error']='';r.fulfill(json=jobs[1]);return
   if path.startswith('/api/footspa-references/') and req.method=='GET':r.continue_();return
   if path.startswith('/api/'):
@@ -74,23 +78,20 @@ with sync_playwright() as pw:
   assert project['plans'][0]['mapping']=='common' and len(project['plans'][0]['imageIds'])==1
   expect(page.locator('#studioTransform')).to_be_enabled()
   page.locator('#studioAssets').click();expect(page.locator('#modal img')).not_to_have_count(0);page.locator('#modal .close').click()
-  page.locator('#studioGeneratePrompts').click();expect(page.locator('#studioPromptState')).to_contain_text('正在生成')
+  expect(page.locator('#studioCompletedPrompts')).to_be_hidden();expect(page.locator('[data-prompt]')).to_have_count(0)
   page.locator('#projectVideoModel').select_option('tokendance-seedance-2.5');expect(page.locator('#projectVideoModel')).to_be_enabled()
-  project['plans'][0]['prompts']=['5秒，固定监控视角，敲门并等待。','5秒，固定监控视角，敲门并等待。'];project['plans'][0]['promptsDirty']=False
-  expect(page.locator('[data-prompt]')).to_have_count(2)
-  first=page.locator('[data-prompt]').first;first.fill('人工修改后的提示词');page.locator('h1').click();page.wait_for_timeout(3100);expect(first).to_have_value('人工修改后的提示词')
   expect(page.locator('#studioSubmit')).to_be_enabled();page.locator('#studioSubmit').click()
   expect(page.locator('#studioResults')).to_contain_text('网页输入框未找到，尚未发送');assert len(submits)==1 and submits[0]['generationSettings']['videoRoute']=='tokendance-seedance-2.5'
+  expect(page.locator('#studioCompletedPrompts')).to_be_hidden()
   page.locator('[data-retry-studio-job]').click();expect(page.locator('[data-retry-studio-job]')).to_have_count(0)
   jobs[0].update(status='complete',outputs=[{'url':'/mock-video'}]);expect(page.locator('#studioResults video')).to_have_count(1)
   page.locator('#studioResults video').evaluate('(v)=>v.dataset.testKeep="same-node"');jobs[1]['providerProgress']={'message':'等待分配'};page.wait_for_timeout(3000);expect(page.locator('#studioResults video')).to_have_attribute('data-test-keep','same-node')
   page.screenshot(path=str(OUT/'production-desktop.png'),full_page=True)
   page.locator('[data-step=templates]').first.click();expect(page.locator('#studioNext')).to_be_visible();page.wait_for_timeout(3000);page.locator('#studioNext').click();expect(page.locator('.studio-image-thumb')).to_have_count(2)
-  page.locator('#studioTrial').click();page.wait_for_timeout(700);previous_request=submits[-1]['requestId']
-  page.locator('[data-prompt]').first.fill('新的试片内容，固定机位敲门');page.locator('h1').click();page.wait_for_timeout(800);page.locator('#studioTrial').click();page.wait_for_timeout(700);assert submits[-1]['requestId']!=previous_request
+  expect(page.locator('[data-prompt]')).to_have_count(1);expect(page.locator('#studioCompletedPrompts')).to_be_visible();page.locator('[data-prompt]').first.fill('成片后人工修改');page.locator('h1').click();page.wait_for_timeout(800);expect(page.locator('[data-prompt]').first).to_have_value('成片后人工修改')
   page.locator('#studioTransform').click();expect(page.locator('#studioUseOriginal')).to_have_text('✓ 采用这张底图');expect(page.locator('.studio-image-thumb')).to_have_count(3);assert len(transforms)==1
   page.locator('#studioUseOriginal').click();page.wait_for_timeout(3200);expect(page.locator('#studioUseOriginal')).to_have_text('✓ 直接使用原图');assert next(a for a in catalog['assets'] if a['id']=='processed')['confirmed'];assert all(any(a['id']==u['id'] for a in catalog['assets']) for u in uploads)
   page.set_viewport_size({'width':390,'height':844});page.wait_for_timeout(500);assert page.evaluate('document.documentElement.scrollWidth<=innerWidth');page.screenshot(path=str(OUT/'production-mobile.png'),full_page=True)
   assert not errors,errors
-  print(json.dumps({'checks':['两页导航与选择保留','双图上传预览与素材缩略图','原图直接复用多条视频，不强制生图','提示词处理中模型可修改','人工提示词保存','同页视频提交失败重试及稳定播放器','手机无横向溢出'],'paidRequests':0,'pageErrors':errors},ensure_ascii=False))
+  print(json.dumps({'checks':['两页导航与选择保留','双图上传预览与素材缩略图','原图直接复用多条视频，不强制生图','选择模型后一次提交，提示词后台自动准备','成片之前不显示提示词，成片之后可编辑并保存','同页视频提交失败重试及稳定播放器','手机无横向溢出'],'paidRequests':0,'pageErrors':errors},ensure_ascii=False))
  finally:browser.close()

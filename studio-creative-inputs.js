@@ -1,3 +1,4 @@
+import {normalizePromotion,promotionPrompt,promotionErrors} from './promotion-model.js';
 const ids=value=>{if(value===undefined)return [];if(!Array.isArray(value)||value.length>12||value.some(v=>typeof v!=='string'||!v||v.length>100))throw Error('素材编号无效，每类最多12张');return [...new Set(value)];};
 const text=(value,max=2000)=>String(value||'').trim().slice(0,max);
 export function creativeInputs(input,previous={}){
@@ -7,9 +8,10 @@ export function creativeInputs(input,previous={}){
  const avatarMode=input.avatarMode??previous.avatarMode??'native';if(!['native','audio-driven'].includes(avatarMode))throw Error('口播生成方式无效');
  const audioUrl=text(input.audioUrl??previous.audioUrl,2000);
  if(audioUrl){const url=new URL(audioUrl);if(url.protocol!=='https:'||url.username||url.password)throw Error('配音地址须为不含账号密码的HTTPS链接');}
- return {videoDirection,avatarMode,audioUrl,materials:{productImageIds:ids(m.productImageIds),personImageIds:ids(m.personImageIds),sceneImageIds:ids(m.sceneImageIds)},productBrief:{name:text(b.name,100),sellingPoints:text(b.sellingPoints),script:text(b.script,4000),voice:text(b.voice,200),music:text(b.music,200)},massageSpec:{bodyArea:text(s.bodyArea,80),position:text(s.position,200),contact:text(s.contact,300)}};
+ return {videoDirection,avatarMode,audioUrl,promotion:normalizePromotion(input.promotion??previous.promotion),materials:{productImageIds:ids(m.productImageIds),personImageIds:ids(m.personImageIds),sceneImageIds:ids(m.sceneImageIds)},productBrief:{name:text(b.name,100),sellingPoints:text(b.sellingPoints),script:text(b.script,4000),voice:text(b.voice,200),music:text(b.music,200)},massageSpec:{bodyArea:text(s.bodyArea,80),position:text(s.position,200),contact:text(s.contact,300)}};
 }
-export function creativePrompt(p){
+export function creativePrompt(p,plan){
+ if(p.promotion?.enabled&&plan)return promotionPrompt(p,plan);
  const {productBrief:b={},materials:m={},massageSpec:s={}}=p,lines=[];
  if(b.name||b.sellingPoints)lines.push(`真实商品：${b.name||'按产品图'}。已确认卖点：${b.sellingPoints||'只展示可见外观，不编造功效'}。`);
  if(m.productImageIds?.length)lines.push('产品参考图锁定包装、形状、颜色、标签及材质，不改变商品身份。');
@@ -25,7 +27,7 @@ export function creativePrompt(p){
  return lines.join('\n');
 }
 export function creativeErrors(p,references,routes=[]){
- const errors=[],avatar=p.templateTypeId?.endsWith(':avatar-talk'),b=p.productBrief||{},m=p.materials||{};
+ const errors=promotionErrors(p,references,routes),avatar=p.templateTypeId?.endsWith(':avatar-talk'),b=p.productBrief||{},m=p.materials||{};
  for(const list of Object.values(m))for(const id of list){try{references.get(id);}catch{errors.push('所选素材不存在，请重新选择');}}
  if(avatar||p.videoDirection){if(!m.productImageIds?.length)errors.push('请添加真实产品图');if(!b.name)errors.push('请填写产品名称');if(!b.sellingPoints)errors.push('请填写并确认产品卖点');}
  if(avatar){if(!b.script)errors.push('请填写口播文案');
