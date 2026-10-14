@@ -11,3 +11,5 @@
 .monitor-auto [hidden]{display:none!important}
 
 .monitor-auto .studio-legacy-image-tools{display:none}
+
+.studio-customization{padding:18px 20px;margin-bottom:18px;border-left:3px solid #0864ff}.studio-customization header h2{margin:0;font-size:20px}.studio-customization header h2 small{font-size:12px;font-weight:400;margin-left:8px;color:#6f82a2}.studio-customization header p{font-size:12px;color:#7386a4;margin:7px 0 15px}.studio-customization-fields{display:grid;grid-template-columns:.8fr 1fr 1.3fr;gap:18px}.studio-customization-fields label{display:flex;flex-direction:column;gap:8px;font-size:13px;font-weight:600;min-width:0}.studio-customization-fields input,.studio-customization-fields textarea{width:100%;border:1px solid #dce4f1;border-radius:6px;padding:10px 12px;background:white;font:400 13px/1.6 inherit;color:#173254}.studio-customization-fields textarea{height:82px;resize:vertical}.studio-customization-fields small{font-size:11px;font-weight:400;color:#7c8fac;line-height:1.6}@media(max-width:760px){.studio-customization-fields{grid-template-columns:1fr}.studio-customization{padding:15px}}

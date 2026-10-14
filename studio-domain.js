@@ -1,3 +1,4 @@
+import {monitorCustomization} from './monitor-customization.js';
 import {monitorVideoRules} from './image-transforms.js';
 import {buildCatalog, defaultType, INDUSTRIES, catalogSeeds} from './studio-catalog.js';
 import fs from 'node:fs';
@@ -91,7 +92,7 @@ export class StudioDomain {
         const count=Number(plan.count),mapping=plan.mapping||template.mapping||'common';
         const clean={id:plan.id||randomUUID(),templateId:template.id,snapshot:template,count,duration:Number(plan.duration)||template.duration,videoRoute:plan.videoRoute||'doubao',resolution:plan.resolution||'',ratio:plan.ratio||previous?.ratio||'9:16',referenceMode:plan.referenceMode||previous?.referenceMode||'first-frame',autoRatio:plan.autoRatio??previous?.autoRatio??true,mapping,imageIds:plan.imageIds||[],rows:plan.rows||[],shotImages:plan.shotImages||[],displayFormat:String(plan.displayFormat??previous?.displayFormat??'').slice(0,40),creativeBrief:String(plan.creativeBrief||'').slice(0,3000),imageConfig:Object.fromEntries(['scene','people','pose','brief','sourceSceneId'].map(k=>[k,String(plan.imageConfig?.[k]??previous?.imageConfig?.[k]??'').slice(0,2000)])),content:String(plan.content||'').slice(0,16000),prompts:previous?.prompts||[],scriptConfirmed:!!plan.scriptConfirmed};
         slotsFor(clean);
-        const signature=fingerprint({...clean,prompts:undefined,scriptConfirmed:undefined,...(creative.promotion.enabled||creative.videoDirection||Object.values(creative.materials).some(v=>v.length)||Object.values(creative.productBrief).some(Boolean)||Object.values(creative.massageSpec).some(Boolean)?{creative}: {})});
+        const signature=fingerprint({...clean,...(typeId==='footspa:monitor'||template.packId==='foot-spa-store'?{monitorBrief:monitorCustomization({...p,...input})}:{}),prompts:undefined,scriptConfirmed:undefined,...(creative.promotion.enabled||creative.videoDirection||Object.values(creative.materials).some(v=>v.length)||Object.values(creative.productBrief).some(Boolean)||Object.values(creative.massageSpec).some(Boolean)?{creative}: {})});
         clean.prompts=clean.prompts.slice(0,count);
         // Prompt validity belongs to the server; stale editor flags cannot invalidate a completed draft.
         clean.promptsDirty=!!previous?.promptsDirty;
@@ -133,6 +134,6 @@ export class StudioDomain {
     if(p.scene==='story'&&(!p.brandName||!p.brandFacts))errors.push('请填写宣传主体与已确认的品牌事实');
     return {count,ready,errors:[...new Set(errors)]};
   }
-  currentFingerprint(p,plan,index){return fingerprint({signature:plan.signature,prompt:plan.prompts[index],images:slotsFor(plan)[index],brand:p.brandName,facts:p.brandFacts,...(p.promotion?.enabled||p.videoDirection||Object.values(p.materials||{}).some(v=>v.length)||Object.values(p.productBrief||{}).some(Boolean)||Object.values(p.massageSpec||{}).some(Boolean)?{creative:creativeInputs(p)}:{})});}
+  currentFingerprint(p,plan,index){return fingerprint({...(p.templateTypeId==='footspa:monitor'||plan.snapshot.packId==='foot-spa-store'?{monitorBrief:monitorCustomization(p)}:{}),signature:plan.signature,prompt:plan.prompts[index],images:slotsFor(plan)[index],brand:p.brandName,facts:p.brandFacts,...(p.promotion?.enabled||p.videoDirection||Object.values(p.materials||{}).some(v=>v.length)||Object.values(p.productBrief||{}).some(Boolean)||Object.values(p.massageSpec||{}).some(Boolean)?{creative:creativeInputs(p)}:{})});}
   adopted(p,queue){return p.trials.filter(t=>{const plan=p.plans.find(v=>v.id===t.planId);return plan && t.adopted && queue.state.jobs.find(j=>j.id===t.jobId)?.status==='complete' && this.currentFingerprint(p,plan,t.index)===t.fingerprint;});}
 }

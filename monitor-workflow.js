@@ -62,7 +62,7 @@ export class MonitorWorkflow {
       input.only,input.independent,
       sources,
       p.materials?.personImageIds || [],
-      p.peopleBrief,
+      p.peopleBrief,p.brandName,p.contentBrief,
       p.plans.map((v) => [
         v.id,
         v.count,

@@ -1,0 +1,13 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import {monitorCustomizationPrompt} from './monitor-customization.js';
+import {StudioImages} from './studio-images.js';
+import {StudioService} from './studio-service.js';
+import {StudioDomain} from './studio-domain.js';
+import {loadActionTemplates} from './action-templates.js';
+test('人物与足浴环境默认优化；实体招牌允许，监控和模板约束保持',()=>{const text=monitorCustomizationPrompt({brandName:'悦足堂',peopleBrief:'温婉漂亮',contentBrief:'暖色木饰面'});assert.match(text,/悦足堂/);assert.match(text,/实体门店招牌/);assert.match(text,/温婉漂亮/);assert.match(text,/暖色木饰面/);assert.match(text,/固定45度/);assert.match(text,/不能改模板动作/);assert.match(monitorCustomizationPrompt({}),/清秀漂亮/);});
+test('上传人物参考锁定身份，视频沿用底图而非重新改脸或装修',()=>{const p={brandName:'悦足堂',peopleBrief:'换成另一张脸',contentBrief:'改成白色墙',materials:{personImageIds:['person']}};assert.match(monitorCustomizationPrompt(p),/锁定真实面容/);const video=monitorCustomizationPrompt(p,{video:true,lockedFrame:true});assert.match(video,/不在视频阶段改脸/);assert.match(video,/悦足堂/);assert.doesNotMatch(video,/换成另一张脸|改成白色墙/);});
+test('输入确实进入生图和视频描述，保存后影响提示词有效性',async t=>{const dir=fs.mkdtempSync(path.join(os.tmpdir(),'monitor-brief-'));t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));const action=loadActionTemplates()[0],seed={id:'t',name:action.name,packId:'foot-spa-store',actionId:action.id,actionTemplate:action,scene:'footspa',actions:[action.actionText],description:action.actionText,people:action.people,duration:5};const domain=new StudioDomain(path.join(dir,'studio.json'),[seed]);const p=domain.saveProject({scene:'footspa',brandName:'悦足堂',peopleBrief:'五官精致自然',contentBrief:'背景有木饰面和包间号码牌',plans:[{templateId:'t',count:1,duration:5,videoRoute:'doubao',imageIds:['frame'],ratio:'9:16',mapping:'common'}]});p.templateTypeId='footspa:monitor';const service={domain,project:id=>domain.project(id),provider:{keyframeConfigured:true,routes:[]},references:{get:id=>({id})}};const images=new StudioImages(path.join(dir,'images.json'),service);clearInterval(images.timer);images.pump=()=>{};const image=images.create({projectId:p.id,planId:p.plans[0].id,count:1,requestId:'test'});assert.match(image.items[0].prompt,/悦足堂|实体门店招牌/);assert.match(image.items[0].prompt,/五官精致自然/);await StudioService.prototype.generate.call(service,p.id);assert.match(p.plans[0].prompts[0],/悦足堂/);assert.match(p.plans[0].prompts[0],/保持底图/);const before=p.plans[0].signature;p.templateTypeId='';domain.saveProject({...p,brandName:'新店名'});assert.notEqual(p.plans[0].signature,before);assert.equal(p.plans[0].promptsDirty,true);});

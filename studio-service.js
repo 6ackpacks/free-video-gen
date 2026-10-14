@@ -1,3 +1,4 @@
+import {monitorCustomizationPrompt} from './monitor-customization.js';
 import {upgradeServiceRecipes} from './service-recipes.js';
 import {VideoProduction} from './video-production.js';
 import {monitorVideoRules} from './image-transforms.js';
@@ -73,7 +74,7 @@ export class StudioService {
         plan.prompts=prompts;plan.promptsDirty=false;plan.scriptConfirmed=false;this.domain.save();completed+=only?1:plan.count;report({completed,total});continue;
       }
       const monitor=plan.snapshot.packId==='foot-spa-store'&&plan.snapshot.actionTemplate;
-      const baseFor=index=>p.promotion?.enabled&&promotionCategory(p)?promotionPrompt(p,plan)+(plan.creativeBrief?'\n本条补充：'+plan.creativeBrief:''):(monitor?footspaActionPrompt(plan.snapshot.actionTemplate,{duration:plan.duration,ratio:plan.ratio,personImages:!!p.materials?.personImageIds?.length,index,lockFrame:!!slotsFor(plan)[index-1]?.length}):plan.content||plan.snapshot.description)+'\n已确认动作顺序：'+plan.snapshot.actions.join('；')+'\n'+(plan.content?'用户编辑的动作补充：'+plan.content+'\n':'')+creativePrompt(p,plan)+(monitor&&p.peopleBrief&&!plan.imageIds?.length?'\n人物造型补充（不得改变模板人数）：'+p.peopleBrief:'');
+      const baseFor=index=>p.promotion?.enabled&&promotionCategory(p)?promotionPrompt(p,plan)+(plan.creativeBrief?'\n本条补充：'+plan.creativeBrief:''):(monitor?footspaActionPrompt(plan.snapshot.actionTemplate,{duration:plan.duration,ratio:plan.ratio,personImages:!!p.materials?.personImageIds?.length,index,lockFrame:!!slotsFor(plan)[index-1]?.length}):plan.content||plan.snapshot.description)+'\n已确认动作顺序：'+plan.snapshot.actions.join('；')+'\n'+(plan.content?'用户编辑的动作补充：'+plan.content+'\n':'')+creativePrompt(p,plan)+(monitor?'\n'+monitorCustomizationPrompt(p,{video:true,lockedFrame:!!slotsFor(plan)[index-1]?.length}):'')+(monitor&&p.peopleBrief&&!plan.imageIds?.length?'\n人物造型补充（不得改变模板人数）：'+p.peopleBrief:'');
       if(monitor){
         const prompts=Array.from({length:plan.count},(_,i)=>plan.prompts?.[i]||'');
         for(let i=0;i<plan.count;i++)if((!only||only.index===i)&&!prompts[i].trim())prompts[i]=baseFor(i+1);
