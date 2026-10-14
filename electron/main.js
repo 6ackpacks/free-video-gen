@@ -3,6 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { app, BrowserWindow, WebContentsView, ipcMain, session, shell } from 'electron';
 import { AccountStore } from './account-store.js';
+import {prepareSessionDirectory} from './session-directory.js';
 import {createNativeVideoAdapter} from './video-adapter.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -21,6 +22,10 @@ function loadEnv(filename) {
 }
 loadEnv(path.join(projectRoot, 'project.env'));
 process.env.PORT ||= '4173';
+// Keep desktop sessions at the same location used by the server and earlier releases.
+const accountDirectory=prepareSessionDirectory(projectRoot,path.join(app.getPath('appData'),'video-api-workbench'));
+bootLog('account storage default '+app.getPath('userData')+'; canonical '+accountDirectory);
+app.setPath('userData',accountDirectory);
 
 let window; let store; let selectedId = ''; let bounds = { x: 420, y: 62, width: 1000, height: 800 };
 const views = new Map();
@@ -113,7 +118,8 @@ async function bootstrap() {
     ? app.setAsDefaultProtocolClient('video-workbench', process.execPath, [projectRoot])
     : app.setAsDefaultProtocolClient('video-workbench');
   bootLog(`launch protocol ${protocolRegistered ? 'registered' : 'unavailable'}`);
-  store = new AccountStore(app.getPath('userData'));
+  store = new AccountStore(accountDirectory);
+  bootLog('account storage loaded '+store.file+'; accounts '+store.state.accounts.length);
   globalThis.workbenchAccountState=()=>store.list(running());
   globalThis.workbenchOpenAccount=async id=>{store.get(id);focusWorkbench();await window.webContents.executeJavaScript(`window.StudioShell.openAccounts(${JSON.stringify(id)})`,true);};
   const createExecutionView=async id=>{const prior=executionViews.get(id);if(prior&&!prior.isDestroyed())return prior;const account=store.get(id);const accountSession=session.fromPartition(accountPartition(id));await accountSession.setProxy(account.proxy?{proxyRules:account.proxy}:{mode:'system'});const view=new BrowserWindow({show:false,width:1280,height:900,title:'豆包后台执行',webPreferences:{partition:accountPartition(id),sandbox:true,contextIsolation:true,nodeIntegration:false,backgroundThrottling:false}});view.webContents.setWindowOpenHandler(()=>({action:'deny'}));view.webContents.on('will-navigate',(e,url)=>{if(!/^https:\/\//.test(url))e.preventDefault();});executionViews.set(id,view);return view;};

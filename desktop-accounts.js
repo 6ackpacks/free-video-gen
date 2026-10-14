@@ -1,9 +1,11 @@
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
+import {fileURLToPath} from "node:url";
+const fixedDirectory=fileURLToPath(new URL("./data/desktop-session/",import.meta.url));
 
 export function desktopAccountState(
-  directory = path.join(
+  directory = fs.existsSync(path.join(fixedDirectory,"doubao-accounts.json"))?fixedDirectory:path.join(
     process.env.APPDATA || path.join(os.homedir(), ".config"),
     "video-api-workbench",
   ),
