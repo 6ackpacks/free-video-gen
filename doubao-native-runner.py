@@ -3,12 +3,11 @@ from pathlib import Path
 from platformdirs import user_data_path
 class NativeVideoRunner:
  def run(self,profile_dir,prompt,model,ratio,duration,update,cancel_event,*,mode='t2v',image_paths=None):
-  db=sqlite3.connect(Path(user_data_path('DoubaoManager'))/'doupool.sqlite3');row=db.execute('select id from account where profile_dir=?',(str(profile_dir),)).fetchone();db.close()
-  if not row:raise RuntimeError('桌面账号没有对应的执行记录')
-  db=sqlite3.connect(Path(user_data_path('DoubaoManager'))/'doupool.sqlite3');record=db.execute("select id from videotask where account_id=? and prompt=? and status='starting' order by created_at desc limit 1",(row[0],prompt)).fetchone();db.close()
-  if not record:raise RuntimeError('找不到原始任务编号，不能安全提交')
+  db=sqlite3.connect(Path(user_data_path('DoubaoManager'))/'doupool.sqlite3');records=db.execute("select id,account_id from videotask where prompt=? and status='starting' order by created_at desc limit 2",(prompt,)).fetchall();db.close()
+  if len(records)!=1:raise RuntimeError('无法唯一核对原始任务编号，不能安全提交')
+  record=records[0]
   base='http://127.0.0.1:4192/api/desktop/video-tasks'
-  payload={'requestId':record[0],'accountId':row[0],'prompt':prompt,'model':model,'ratio':ratio,'duration':duration,'imagePaths':image_paths or []}
+  payload={'requestId':record[0],'accountId':record[1],'prompt':prompt,'model':model,'ratio':ratio,'duration':duration,'imagePaths':image_paths or []}
   req=urllib.request.Request(base,data=json.dumps(payload).encode(),headers={'Content-Type':'application/json'},method='POST')
   try:task=json.load(urllib.request.urlopen(req,timeout=30))
   except urllib.error.HTTPError as e:raise RuntimeError('桌面创建被拒绝：'+e.read().decode()[:300])
