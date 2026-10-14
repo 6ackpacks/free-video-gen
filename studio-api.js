@@ -1,3 +1,4 @@
+import {deleteProjects} from './project-management.js';
 import {savePromotionPreset,applyPromotionPreset} from './promotion-production.js';
 export async function studioApi(service,req,res,url,{body,reply}) {
   const route=url.pathname;if(!route.startsWith('/api/studio'))return false;
@@ -32,11 +33,13 @@ export async function studioApi(service,req,res,url,{body,reply}) {
   if(directVideo&&req.method==='POST')return send(service.videoProduction.start(directVideo[1],await body(req)));
   const directTask=/^\/api\/studio\/video-productions\/([^/]+)$/.exec(route);
   if(directTask&&req.method==='GET')return send(service.videoProduction.get(directTask[1]));
+  if(route==='/api/studio/projects/delete'&&req.method==='POST')return send(deleteProjects(service,await body(req)));
   if(route==='/api/studio/projects'&&req.method==='POST'){const input=await body(req);if(service.videoProduction?.busy(input.id)||service.promotionProduction?.busy(input.id))throw Error('视频准备中，请等待完成后调整资料');return send(domain.saveProject(input));}
   const flow=/^\/api\/studio\/projects\/([^/]+)\/monitor-workflow(?:\/(confirm|retry|settings))?$/.exec(route);
   if(flow){if(req.method==='GET')return send(service.monitorWorkflow.get(flow[1]));if(req.method!=='POST')throw Error('不支持的工作线操作');const input=await body(req);if(flow[2]==='settings')return send(service.monitorWorkflow.configure(flow[1],input));if(flow[2]==='confirm')return send(service.monitorWorkflow.confirm(flow[1],input));if(flow[2]==='retry')return send(await service.monitorWorkflow.retry(flow[1],input.slotId,input.externalId));return send(service.monitorWorkflow.create(flow[1],input));}
   const project=/^\/api\/studio\/projects\/([^/]+)(?:\/(prompts|submit|adopt|draft))?$/.exec(route);
   if(project){
+    if(req.method==='DELETE'&&!project[2])return send(deleteProjects(service,{projectIds:[project[1]]}));
     const p=domain.project(project[1]);
     if(req.method==='GET')return send(service.project(p.id));
     if(req.method==='POST'){

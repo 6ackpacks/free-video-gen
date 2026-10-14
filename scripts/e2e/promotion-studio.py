@@ -45,7 +45,8 @@ try:
    if req.method not in ['GET','HEAD']:raise AssertionError('Unexpected real mutation: '+path)
    route.fulfill(json={})
   ctx.route('**/api/**',intercept)
-  page.goto(BASE+'/studio?project=promotion-browser',wait_until='networkidle');expect(page.locator('#promotionSample')).to_be_visible();expect(page.locator('[data-display-format]')).to_have_count(5)
+  page.goto(BASE+'/studio?project=promotion-browser',wait_until='networkidle')
+  expect(page.locator('.promotion-inspiration')).to_be_visible();assert page.locator('.promotion-inspiration').bounding_box()['y']<page.locator('.promotion-presets').bounding_box()['y'];expect(page.locator('.promotion-templates .promotion-category-art')).to_have_count(0);assert page.locator('.promotion-inspiration img').bounding_box()['height']<=140;expect(page.locator('#promotionSample')).to_be_visible();expect(page.locator('[data-display-format]')).to_have_count(5)
   assert not page.locator('#exportProjectPrompts').count();assert not page.locator('[data-prompt]').count()
   page.locator('[data-promotion-field="copy"]').fill('坐下来喝杯咖啡。');page.wait_for_timeout(650);assert project['promotion']['copy']=='坐下来喝杯咖啡。'
   page.locator('#savePromotionPreset').click();page.locator('#promotionPresetName').fill('咖啡馆配套一');page.locator('#confirmSavePromotionPreset').click();expect(page.locator('#promotionPreset')).to_have_value('saved-preset')
