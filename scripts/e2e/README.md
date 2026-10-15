@@ -1,5 +1,9 @@
 # Browser interaction checks
 
+Final release checks and their precise scope are recorded in `docs/最终功能按钮验收矩阵.md`. Additional fixture-only checks: `final-functional-audit.py`, `media-failure-audit.py`, `all-type-navigation.py`, `assets-button-audit.py`, `replica-button-audit.py`, `settings-template-buttons-review.py`, and `release-gallery-and-home-materials.py`.
+
+`real-video-playback.py` reads existing cached acceptance videos and measures real playback/seek behavior; it blocks writes. The separate `scripts/release-validation.mjs` is a live Doubao generation driver and consumes platform generation quota. It is not part of the fixture test suite. Its persistent manifest prevents silent duplication; sent or ambiguous jobs must be reconciled before any fresh generation.
+
 Start the local app and install Python Playwright (`pip install playwright`, then `python -m playwright install chromium`). Run from the repository root:
 
 ```text

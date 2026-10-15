@@ -49,7 +49,7 @@ test('异步试览准备显示状态、复用同一下载，失败可重试', as
 test('preview and batch saves share a single limited transfer', async t => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'video-media-'));
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
-  const store = new MediaStore(directory, { maxKbps: 128 });
+  const store = new MediaStore(directory, { maxKbps: 128, maxConcurrency: 1 });
   let active = 0;
   let peak = 0;
   let requests = 0;
@@ -76,6 +76,19 @@ test('preview and batch saves share a single limited transfer', async t => {
   assert.ok(Date.now() - started >= 400, 'two 32 KB files should take about 500 ms at 128 KB/s');
   assert.equal(fs.statSync(store.filename(one)).size, 32 * 1024);
   assert.equal(fs.statSync(store.filename(two)).size, 32 * 1024);
+});
+
+test('a slow video does not block a second preview and transfers stay bounded', async t => {
+  const directory=fs.mkdtempSync(path.join(os.tmpdir(),'parallel-video-'));
+  t.after(()=>fs.rmSync(directory,{recursive:true,force:true}));
+  const store=new MediaStore(directory,{maxConcurrency:2,maxKbps:2048});
+  let finishSlow,active=0,peak=0,calls=0;
+  store.saveOne=async job=>{calls++;active++;peak=Math.max(peak,active);try{if(job.id==='slow')await new Promise(resolve=>finishSlow=resolve);return store.filename(job);}finally{active--;}};
+  const slow=store.save({id:'slow'}),same=store.save({id:'slow'});
+  await store.save({id:'fast'});
+  assert.equal(active,1,'fast preview completes while slow transfer remains active');
+  finishSlow();await Promise.all([slow,same]);
+  assert.equal(calls,2);assert.equal(peak,2);
 });
 
 test('first preview is served from a completed local cache', async t => {

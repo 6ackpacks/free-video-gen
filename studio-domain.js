@@ -81,6 +81,8 @@ export class StudioDomain {
       const plans=input.plans??p.plans;
       if(!Array.isArray(plans)||plans.some(plan=>!selectedType.actionIds.includes(plan.templateId)))throw Error('所选动作不属于本项目的模板类型');
     }
+    const storyFacts=(input.scene||p.scene)==='story'?{brandName:String(input.brandName??p.brandName??'').slice(0,80),brandFacts:String(input.brandFacts??p.brandFacts??'').slice(0,30000),promptVersion:2}:null;
+    if(storyFacts&&!input.plans&&(input.brandName!==undefined||input.brandFacts!==undefined))input={...input,plans:p.plans};
     if(input.plans){
       if(!Array.isArray(input.plans)||input.plans.length>30)throw Error('一次最多选择30个模板');
       const plans=input.plans.map(plan=>{
@@ -92,7 +94,7 @@ export class StudioDomain {
         const count=Number(plan.count),mapping=plan.mapping||template.mapping||'common';
         const clean={id:plan.id||randomUUID(),templateId:template.id,snapshot:template,count,duration:Number(plan.duration)||template.duration,videoRoute:plan.videoRoute||'doubao',resolution:plan.resolution||'',ratio:plan.ratio||previous?.ratio||'9:16',referenceMode:plan.referenceMode||previous?.referenceMode||'first-frame',autoRatio:plan.autoRatio??previous?.autoRatio??true,mapping,imageIds:plan.imageIds||[],rows:plan.rows||[],shotImages:plan.shotImages||[],displayFormat:String(plan.displayFormat??previous?.displayFormat??'').slice(0,40),creativeBrief:String(plan.creativeBrief||'').slice(0,3000),imageConfig:Object.fromEntries(['scene','people','pose','brief','sourceSceneId'].map(k=>[k,String(plan.imageConfig?.[k]??previous?.imageConfig?.[k]??'').slice(0,2000)])),content:String(plan.content||'').slice(0,16000),prompts:previous?.prompts||[],scriptConfirmed:!!plan.scriptConfirmed};
         slotsFor(clean);
-        const signature=fingerprint({...clean,...(creative.promotion.enabled?{promotionDirectionVersion:2}:{}),...(typeId==='footspa:monitor'||template.packId==='foot-spa-store'?{monitorBrief:monitorCustomization({...p,...input})}:{}),prompts:undefined,scriptConfirmed:undefined,...(creative.promotion.enabled||creative.videoDirection||Object.values(creative.materials).some(v=>v.length)||Object.values(creative.productBrief).some(Boolean)||Object.values(creative.massageSpec).some(Boolean)?{creative}: {})});
+        const signature=fingerprint({...clean,...(storyFacts?{storyFacts}:{}),...(creative.promotion.enabled?{promotionDirectionVersion:2}:{}),...(typeId==='footspa:monitor'||template.packId==='foot-spa-store'?{monitorBrief:monitorCustomization({...p,...input})}:{}),prompts:undefined,scriptConfirmed:undefined,...(creative.promotion.enabled||creative.videoDirection||Object.values(creative.materials).some(v=>v.length)||Object.values(creative.productBrief).some(Boolean)||Object.values(creative.massageSpec).some(Boolean)?{creative}: {})});
         clean.prompts=clean.prompts.slice(0,count);
         // Prompt validity belongs to the server; stale editor flags cannot invalidate a completed draft.
         clean.promptsDirty=!!previous?.promptsDirty;

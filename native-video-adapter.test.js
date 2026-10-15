@@ -3,12 +3,12 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import {createNativeVideoAdapter} from './electron/video-adapter.js';
+import {createNativeVideoAdapter,videoQuotaExhausted} from './electron/video-adapter.js';
 test('空白新会话直接发送，不依赖新对话按钮，不弹出账号池；重复请求不再次发送',async()=>{
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'native-video-'));let sends=0,opens=0;let url='https://www.doubao.com/chat/';
  const view={webContents:{loadURL:async v=>{url=v;},isDestroyed:()=>false,insertText:()=>{},sendInputEvent:e=>{if(e.type==='keyUp'){sends++;url='https://www.doubao.com/chat/123';}},executeJavaScript:async code=>{if(code.includes('captcha:'))return {url,text:sends?'已开始生成视频':'欢迎',captcha:false,videos:sends?['https://example.com/result.mp4']:[]};if(code.includes('inputReady')||code.includes('.some(e=>e.getClientRects()'))return true;if(code.includes('e.focus()'))return true;throw Error('不应依赖新对话按钮：'+code.slice(0,80));}}};
  const adapter=createNativeVideoAdapter({store:{state:{accounts:[{id:'local',managerAccountId:1}]}},createView:async()=>view,openAccount:async()=>{opens++;},directory:dir,wait:async()=>{}});
- const input={requestId:'original-task',accountId:1,duration:5,ratio:'9:16',model:'seedance_v2.0_mini',imagePaths:[],prompt:'真实门店走廊中的自然行走'};
+ const input={requestId:'original-task',accountId:1,duration:15,ratio:'9:16',model:'seedance_v2.0_mini',imagePaths:[],prompt:'真实门店走廊中的自然行走'};
  const task=adapter.start(input);for(let i=0;i<50&&task.status!=='complete';i++)await new Promise(r=>setImmediate(r));
  assert.equal(task.status,'complete');assert.equal(task.conversationId,'123');assert.equal(sends,1);assert.equal(opens,0);assert.equal(adapter.start(input).id,task.id);assert.equal(sends,1);fs.rmSync(dir,{recursive:true,force:true});
 });
@@ -33,4 +33,15 @@ test('输入框未就绪时不标记已发送；文本框恢复后同一请求�
 test('验证超时后原窗口迟到的会话接收事件仍保存编号，并继续原任务不重发',async()=>{
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'native-late-ack-'));let stamp=Date.now(),sends=0,url='https://www.doubao.com/chat/',completed=false;const events=new Map();const view={webContents:{on:(name,fn)=>events.set(name,fn),removeListener:(name)=>events.delete(name),loadURL:async v=>url=v,isDestroyed:()=>false,insertText:()=>{},sendInputEvent:e=>{if(e.type==='keyUp')sends++;},executeJavaScript:async code=>{if(code.includes('captcha:'))return {url,text:'原请求',captcha:false,videos:completed?['https://example.com/late.mp4']:[]};if(code.includes('e.focus()')||code.includes('.some(e=>e.getClientRects()'))return true;return {status:500};}}};
  const adapter=createNativeVideoAdapter({store:{state:{accounts:[{id:'local',managerAccountId:1}]}},createView:async()=>view,directory:dir,wait:async()=>{stamp+=6*60*1000;},now:()=>stamp});const task=adapter.start({requestId:'late',accountId:1,duration:5,ratio:'9:16',model:'seedance_v2.0_mini',imagePaths:[],prompt:'原请求'});for(let i=0;i<50&&task.status!=='needs_review';i++)await new Promise(r=>setImmediate(r));assert.equal(task.status,'needs_review');assert.equal(task.conversationId,undefined);assert.equal(sends,1);completed=true;url='https://www.doubao.com/chat/999';events.get('did-navigate-in-page')({},url,true);for(let i=0;i<50&&task.status!=='complete';i++)await new Promise(r=>setImmediate(r));assert.equal(task.conversationId,'999');assert.equal(task.status,'complete');assert.equal(sends,1);assert.equal(JSON.parse(fs.readFileSync(path.join(dir,'desktop-video-tasks.json')))[0].conversationId,'999');fs.rmSync(dir,{recursive:true,force:true});
+});
+
+
+test('明确的视频日额度耗尽不是临时限流，历史原会话证据恢复为明确失败',async()=>{
+ assert.equal(videoQuotaExhausted('今日视频生成免费次数用完了，你明天再来'),true);
+ assert.equal(videoQuotaExhausted('STREAM_ERROR rate limited'),false);
+ const dir=fs.mkdtempSync(path.join(os.tmpdir(),'native-quota-'));
+ try{fs.writeFileSync(path.join(dir,'desktop-video-tasks.json'),JSON.stringify([{id:'quota',status:'needs_review',lastSentText:'确认方案',lastResponse:'生成视频中\n确认方案\n今日视频生成免费次数用完了，你明天再来'}]));
+ const adapter=createNativeVideoAdapter({store:{state:{accounts:[]}},createView:async()=>{throw Error('不应发送');},directory:dir});
+ assert.equal(adapter.get('quota').status,'error');assert.equal(adapter.get('quota').failureCode,'daily_quota_exhausted');assert.equal((await adapter.query('quota')).status,'error');
+ }finally{fs.rmSync(dir,{recursive:true,force:true});}
 });

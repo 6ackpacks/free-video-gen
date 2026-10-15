@@ -7,5 +7,5 @@ export function templateArtwork(t={}){
   else if(t.scene==='story')category='story';
   if(category==='product-service')category='service';
   const names={environment:'environment',service:'service',story:'story','avatar-talk':'avatar',monitor:'monitor','massage-care':'generic',interaction:'ktv'};
-  return '/design-assets/visual-'+(names[category]||'generic')+'-v2.png';
+  return '/design-assets/visual-'+(names[category]||'generic')+'-v3.webp';
 }

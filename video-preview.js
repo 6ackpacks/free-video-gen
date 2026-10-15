@@ -7,7 +7,7 @@
   };
   let currentDialog;
   document.addEventListener('click',async event=>{
-    const link=event.target.closest('a[download][href^="/api/video/"]');
+    const link=event.target.closest('a[href^="/api/video/"][href*="download=1"]');
     const id=link&&/^\/api\/video\/([a-f0-9-]{36})/.exec(link.getAttribute('href'))?.[1];
     if(!id||link.dataset.prepared==='1')return;
     event.preventDefault();event.stopImmediatePropagation();
@@ -25,11 +25,11 @@
       if(!dialog.open)return;progress.hidden=true;download.hidden=false;status.textContent='MP4 已保存到本机。点击下载按钮，选择保存位置。';
     }catch(error){progress.hidden=true;status.textContent='下载准备失败：'+error.message+'；请关闭后重试。';}
   },true);
-  function open(url) {
+  function open(url, options = {}) {
     const id = /^\/api\/video\/([a-f0-9-]{36})/i.exec(url)?.[1];
     if (!id) return;
     currentDialog?.close();
-    const dialog = window.WorkbenchUI.dialog('视频试览');
+    const dialog = window.WorkbenchUI.dialog('视频预览');
     currentDialog = dialog;
     const body = dialog.querySelector('.wb-dialog-body');
     body.classList.add('wb-video-preview');
@@ -37,12 +37,12 @@
     const video = body.querySelector('video'), status = body.querySelector('[role=status]'), progress = body.querySelector('progress');
     if(window.StorySubtitles){const subtitles=document.createElement('button');subtitles.textContent='字幕渲染';subtitles.onclick=()=>{const jobId=jobs[index]?.id;if(jobId){dialog.close();window.StorySubtitles.open(jobId);}};body.querySelector('.wb-toolbar').appendChild(subtitles);}
     const previous = body.querySelector('[data-prev]'), next = body.querySelector('[data-next]'), retry = body.querySelector('[data-retry]');
-    let jobs = [], index = 0, timer, revision = 0;
+    let jobs = [], index = 0, timer, revision = 0, localReady = false;
     function stop() { clearTimeout(timer); video.pause(); video.removeAttribute('src'); video.load(); }
     dialog.addEventListener('close', () => { revision++; stop(); if (currentDialog === dialog) currentDialog = null; });
     video.addEventListener('waiting', () => status.textContent = '正在缓冲…');
     video.addEventListener('playing', () => {
-      status.textContent = video.src.includes('preview=1') ? '正在按需播放；网络不稳定时可保存到本机后查看。' : '从本机缓存播放';
+      status.textContent = localReady ? '正在播放本机成片，可拖动进度查看。' : '正在按需播放；网络不稳定时可保存到本机后查看。';
       try { localStorage.setItem('video-preview:seen:' + jobs[index].id, '1'); } catch {}
       document.dispatchEvent(new CustomEvent('workbench:video-previewed', { detail: { id: jobs[index].id } }));
       for(const area of document.querySelectorAll('.wb-review-first')){const data=JSON.parse(area.dataset.signature||'[]');if(data[0])reviewBatch(data[0],area.nextElementSibling);}
@@ -50,13 +50,13 @@
     video.addEventListener('error', () => { if (video.getAttribute('src')) { status.textContent = '浏览器无法播放此视频，请下载查看或重新准备。'; retry.hidden = false; } });
     async function select() {
       const token = ++revision;
-      stop(); video.hidden = true; retry.hidden = true;
+      stop(); video.hidden = true; retry.hidden = true; localReady = false;
       const job = jobs[index];
-      body.querySelector('.wb-preview-title').textContent = job.skillName || job.actionName || `视频 ${job.index || index + 1}`;
+      body.querySelector('.wb-preview-title').textContent = job.previewTitle || job.skillName || job.actionName || job.templateName || `视频 ${job.index || index + 1}`;
       body.querySelector('[data-position]').textContent = `${index + 1} / ${jobs.length}`;
       previous.disabled = index === 0; next.disabled = index >= jobs.length - 1;
       body.querySelector('a').href = `/api/video/${job.id}?download=1`;
-      status.textContent = '正在读取视频…'; progress.hidden = true;
+      status.textContent = '正在读取视频…';document.querySelectorAll('video').forEach(v=>{if(v!==video&&!v.paused)v.pause();}); progress.hidden = true;
       const cacheButton=body.querySelector('[data-cache]');cacheButton.disabled=false;
       cacheButton.onclick=()=>{cacheButton.disabled=true;progress.hidden=false;poll(true);};
       async function poll(first = false) {
@@ -64,8 +64,9 @@
           const state = await api(`/video/${job.id}/cache`, first ? { method: 'POST', body: '{}' } : {});
           if (!dialog.open || token !== revision) return;
           if (state.ready) {
+            localReady = true;
             progress.hidden = true; video.hidden = false;
-            if(!video.getAttribute('src'))video.src = `/api/video/${job.id}`;
+            if(!video.getAttribute('src'))video.src = `/api/video/${job.id}?preview=1`;
             cacheButton.textContent='已保存到本机';cacheButton.disabled=true;
             if(video.paused)status.textContent = '已保存到本机，点击播放；可拖动进度查看。';
             return;
@@ -84,9 +85,9 @@
       try {
         const state=await api(`/video/${job.id}/cache`);
         if(!dialog.open||token!==revision)return;
-        video.hidden=false;video.src=`/api/video/${job.id}${state.ready?'':'?preview=1'}`;
-        cacheButton.textContent=state.ready?'已保存到本机':'保存到本机';cacheButton.disabled=state.ready;
-        status.textContent=state.ready?'本机视频已就绪，点击播放。':'点击播放即可按需加载，无需等整条下载。';
+        video.hidden=false;if(job.videoRoute==='doubao'&&!state.ready){video.hidden=true;progress.hidden=false;cacheButton.disabled=true;status.textContent='正在准备流畅预览，完成后即可播放…';await poll(true);return;}video.src=`/api/video/${job.id}?preview=1`;
+        localReady=state.ready;cacheButton.textContent=state.ready?'已保存到本机':'保存到本机';cacheButton.disabled=state.ready;
+        status.textContent=state.ready?'本机视频已就绪，点击播放。':'点击播放按需加载；网络较慢时可先保存到本机。';
         if(state.running){cacheButton.disabled=true;progress.hidden=false;poll();}
       }catch(error){status.textContent=error.message;retry.hidden=false;}
     }
@@ -96,7 +97,7 @@
     (async () => {
       try {
         const job = await api('/jobs/' + id);
-        const batch = job.batchId ? await api('/jobs?batch=' + encodeURIComponent(job.batchId)) : [job];
+        const batch = Array.isArray(options.playlist) ? options.playlist : job.batchId ? await api('/jobs?batch=' + encodeURIComponent(job.batchId)) : [job];
         if (!dialog.open) return;
         jobs = batch.filter(item => item.status === 'complete' && item.outputs?.length);
         index = jobs.findIndex(item => item.id === id);

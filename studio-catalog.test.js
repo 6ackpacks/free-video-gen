@@ -35,3 +35,14 @@ test('补齐缺失提示词不覆盖用户已经修改的完整文本',async t=>
 test('同一动作增加数量后只补空槽，已编辑的第一条保留',async t=>{const {domain}=fixture(t);const p=domain.saveProject({plans:[{...makePlan(domain.state.templates[0]),count:2}]});p.plans[0].prompts=['人工写的第一条'];let received;const service=Object.create(StudioService.prototype);Object.assign(service,{domain,references:{get:()=>({})},provider:{routes:[],rewritePrompts:async input=>{received=input.items;return {items:input.items.map(i=>({id:i.id,prompt:'补齐第二条'}))};}}});await service.generate(p.id,()=>{},'missing');assert.deepEqual(received.map(i=>i.id),['1']);assert.deepEqual(p.plans[0].prompts,['人工写的第一条','补齐第二条']);});
 
 test('重试待更新提示词只改待更新动作，保留其他人工内容',async t=>{const {domain}=fixture(t);const p=domain.saveProject({plans:domain.state.templates.slice(0,2).map(makePlan)});p.plans[0].prompts=['人工确认的内容'];p.plans[0].promptsDirty=false;p.plans[1].prompts=['需重做的旧内容'];p.plans[1].promptsDirty=true;let calls=0;const service=Object.create(StudioService.prototype);Object.assign(service,{domain,references:{get:()=>({})},provider:{routes:[],rewritePrompts:async input=>{calls++;return {items:input.items.map(i=>({id:i.id,prompt:'重新生成待更新内容'}))};}}});await service.generate(p.id,()=>{},'dirty');assert.equal(p.plans[0].prompts[0],'人工确认的内容');assert.equal(p.plans[1].prompts[0],'重新生成待更新内容');assert.equal(calls,1);});
+
+
+test('短剧修改品牌事实即失效旧内容，未修改的保存保留已确认脚本',t=>{
+ const {domain}=fixture(t);const template=domain.saveTemplate({name:'短剧回归',scene:'story',description:'顾客询问，员工解释',actions:['介绍服务'],duration:15,mapping:'common'});
+ const p=domain.saveProject({scene:'story',brandName:'演示店',brandFacts:'提供日常放松服务',plans:[{...makePlan(template),duration:15}]});
+ p.plans[0].prompts=['合法的旧脚本'];p.plans[0].promptsDirty=false;p.plans[0].scriptConfirmed=true;
+ domain.saveProject(structuredClone(p));assert.equal(p.plans[0].promptsDirty,false);assert.equal(p.plans[0].scriptConfirmed,true);
+ domain.saveProject({id:p.id,brandFacts:'提供预约与接待服务'});assert.equal(p.plans[0].promptsDirty,true);assert.equal(p.plans[0].scriptConfirmed,false);
+ p.plans[0].promptsDirty=false;p.plans[0].scriptConfirmed=true;
+ domain.saveProject({id:p.id,brandName:'另一家店'});assert.equal(p.plans[0].promptsDirty,true);
+});

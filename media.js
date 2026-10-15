@@ -23,10 +23,12 @@ export class MediaStore {
     this.previewRuns = new Map();
     this.saves = new Map();
     this.transfers = new Map();
-    this.saveQueue = Promise.resolve();
+    this.savePending = [];
+    this.saveActive = 0;
+    this.saveConcurrency = Math.max(1, Math.min(3, Number(options.maxConcurrency) || 2));
     this.resolveOutputs = options.resolveOutputs;
     this.preferred = new Map();
-    const kbps = Number(options.maxKbps ?? process.env.VIDEO_MEDIA_MAX_KBPS ?? 128);
+    const kbps = Number(options.maxKbps ?? process.env.VIDEO_MEDIA_MAX_KBPS ?? 2048);
     if (!Number.isFinite(kbps) || kbps < 16 || kbps > 8192) throw new Error('VIDEO_MEDIA_MAX_KBPS 必须在 16–8192 之间');
     this.bytesPerSecond = kbps * 1024;
   }
@@ -64,12 +66,12 @@ export class MediaStore {
   async previewFile(job,file) {
     const target=path.join(this.directory,job.id+'.preview.mp4');if(fs.existsSync(target))return target;
     if(this.previewRuns.has(job.id))return this.previewRuns.get(job.id);
-    const run=new Promise((resolve,reject)=>{const probe=spawn(ffmpegPath,['-hide_banner','-i',file],{windowsHide:true,stdio:['ignore','ignore','pipe']});let info='';probe.stderr.on('data',v=>info+=v);probe.on('error',()=>resolve(file));probe.on('exit',()=>{if(!/Video: hevc/i.test(info)){resolve(file);return;}const temp=target+'.part.mp4',encoder=spawn(ffmpegPath,['-y','-i',file,'-c:v','libx264','-preset','veryfast','-crf','20','-c:a','aac','-map_metadata','0','-movflags','+faststart+use_metadata_tags',temp],{windowsHide:true,stdio:'ignore'});encoder.on('error',reject);encoder.on('exit',code=>{if(code!==0){reject(Error('视频预览转码失败'));return;}fs.renameSync(temp,target);resolve(target);});});});
+    const run=new Promise((resolve,reject)=>{const probe=spawn(ffmpegPath,['-hide_banner','-i',file],{windowsHide:true,stdio:['ignore','ignore','pipe']});let info='';probe.stderr.on('data',v=>info+=v);probe.on('error',()=>resolve(file));probe.on('exit',()=>{if(!/Video: hevc/i.test(info)){resolve(file);return;}const temp=target+'.part.mp4',encoder=spawn(ffmpegPath,['-y','-i',file,'-c:v','libx264','-preset','veryfast','-crf','23','-threads','2','-vf',"scale='min(1280,iw)':'min(1280,ih)':force_original_aspect_ratio=decrease:force_divisible_by=2",'-c:a','aac','-map_metadata','0','-movflags','+faststart+use_metadata_tags',temp],{windowsHide:true,stdio:'ignore'});encoder.on('error',reject);encoder.on('exit',code=>{if(code!==0){reject(Error('视频预览转码失败'));return;}fs.renameSync(temp,target);resolve(target);});});});
     this.previewRuns.set(job.id,run);try{return await run;}finally{this.previewRuns.delete(job.id);}
   }
   async serve(job, req, res, download = false, preview = false) {
     const file = this.filename(job);
-    if(preview&&!download&&job.videoRoute==='doubao'){if(!fs.existsSync(file))await this.save(job);return this.serveLocal(await this.previewFile(job,file),job,req,res,false);}
+    if(preview&&!download&&job.videoRoute==='doubao'){if(!fs.existsSync(file))await this.save(job,true);return this.serveLocal(await this.previewFile(job,file),job,req,res,false);}
     if (preview && !download && !fs.existsSync(file)) {
       const range = req.headers.range;
       if (range && !/^bytes=(?:\d+-\d*|-\d+)$/.test(range)) { res.writeHead(416); return res.end(); }
@@ -119,15 +121,24 @@ export class MediaStore {
     });
     const stream=fs.createReadStream(file, { start, end });res.once('close',()=>stream.destroy());stream.on('error',error=>res.destroy(error));stream.pipe(res);
   }
-  async save(job) {
+  async save(job, priority = false) {
     if (fs.existsSync(this.filename(job))) return this.filename(job);
     if (this.saves.has(job.id)) return this.saves.get(job.id);
-    const pending = this.saveQueue.then(() => this.saveOne(job));
-    // A failed save must not block later jobs.
-    this.saveQueue = pending.catch(() => {});
+    let resolve, reject;
+    const pending = new Promise((yes, no) => { resolve = yes; reject = no; });
+    const task = {job, resolve, reject};
+    priority ? this.savePending.unshift(task) : this.savePending.push(task);
     this.saves.set(job.id, pending);
+    this.pumpSaves();
     try { return await pending; }
     finally { this.saves.delete(job.id); }
+  }
+  pumpSaves() {
+    while (this.saveActive < this.saveConcurrency && this.savePending.length) {
+      const {job, resolve, reject} = this.savePending.shift();
+      this.saveActive++;
+      Promise.resolve().then(() => this.saveOne(job)).then(resolve, reject).finally(() => { this.saveActive--; this.pumpSaves(); });
+    }
   }
   async saveOne(job) {
     const file = this.filename(job);

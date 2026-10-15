@@ -45,6 +45,10 @@ def quota_window_without_tzdata(now, reset_value):
 
 
 def install_task_runtime_fixes(module):
+    # The desktop bridge supports 15-second videos; retain a shared set so the
+    # manager validator and protocol builder agree with the model selector.
+    if hasattr(module, 'DURATIONS'):
+        module.DURATIONS.add(15)
     module.quota_window = quota_window_without_tzdata
     original = module.VideoTaskService._run
     async def guarded_run(service, task_id, cancellation):
@@ -474,7 +478,11 @@ def main() -> None:
         if not all(c in '0123456789abcdef-' for c in native_id) or len(native_id)!=36:raise HTTPException(status_code=400,detail='invalid task id')
         native=json.load(urllib.request.urlopen('http://127.0.0.1:4192/api/desktop/video-tasks/'+native_id,timeout=15))
         task=repository.get_video_task(task_id)
-        if native.get('accountId')!=task.account_id or native.get('conversationId')!=task.conversation_id or native.get('status')!='complete':raise HTTPException(status_code=409,detail='本次会话尚未取得对应成片')
+        if native.get('accountId')!=task.account_id or native.get('conversationId')!=task.conversation_id:raise HTTPException(status_code=409,detail='本次会话与原任务不匹配')
+        if native.get('status')=='error' and native.get('failureCode')=='daily_quota_exhausted':
+            repository.update_video_task(task_id,status='failed',error_message=native.get('error') or '豆包今日视频生成次数已用完')
+            return {'id':task_id,'status':'failed'}
+        if native.get('status')!='complete':raise HTTPException(status_code=409,detail='本次会话尚未取得对应成片')
         repository.update_video_task(task_id,status='succeeded',result_url=native['resultUrl'],fallback_result_url=native['resultUrl'],remote_task_id=native_id,error_message=None)
         return {'id':task_id,'status':'succeeded'}
 

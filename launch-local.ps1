@@ -2,6 +2,10 @@ param([ValidateSet('Desktop','Browser','Keys')][string]$Mode = 'Desktop')
 $ErrorActionPreference = 'Stop'
 Set-Location -LiteralPath $PSScriptRoot
 $taskRuntime = if ($env:FREE_VIDEO_NODE_HOME) { $env:FREE_VIDEO_NODE_HOME } else { Join-Path (Split-Path -Parent $PSScriptRoot) 'free-video-gen-runtime\node-v24.21.0-win-x64' }
+if (-not (Test-Path -LiteralPath (Join-Path $taskRuntime 'node.exe')) -and -not $env:FREE_VIDEO_NODE_HOME) {
+  $taskInstalledRuntime = Join-Path $env:USERPROFILE 'Apps\free-video-gen-runtime\node-v24.21.0-win-x64'
+  if (Test-Path -LiteralPath (Join-Path $taskInstalledRuntime 'node.exe')) { $taskRuntime = $taskInstalledRuntime }
+}
 if (Test-Path -LiteralPath (Join-Path $taskRuntime 'node.exe')) { $env:PATH = $taskRuntime + ';' + $env:PATH }
 $env:PATH = (Join-Path $env:USERPROFILE '.local\bin') + ';' + $env:PATH
 $taskNode = (Get-Command node.exe -ErrorAction Stop).Source
